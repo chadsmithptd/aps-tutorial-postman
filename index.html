@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Temporary ERP</title>
+<style>
+:root {
+  --bg: #fafafa; --bg2: #f3f3f3; --border: #d0d0d0;
+  --text: #1a1a1a; --muted: #777; --dim: #bbb;
+  --accent: #0057b8; --accent-light: #e8f0fb;
+  --danger: #c0392b; --warn: #b35a00; --ok: #1a7a1a;
+  --ec0: #5a7a5a; --ec1: #4a6a8a; --ec2: #7a6a4a; --ec3: #6a4a7a; --ec4: #7a4a4a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Menlo','Consolas','Courier New',monospace;font-size:13px;line-height:1.6;
+  background:var(--bg);color:var(--text);height:100vh;width:100vw;overflow:hidden;
+  display:flex;flex-direction:column}
+
+/* Header */
+#hdr{height:36px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+#hdr .biz{font-size:11px;font-weight:bold;letter-spacing:.1em;text-transform:uppercase}
+#hdr .hb button{background:none;border:1px solid var(--border);color:var(--muted);
+  font-family:inherit;font-size:11px;padding:2px 8px;cursor:pointer;margin-left:6px}
+#hdr .hb button:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Workspace */
+#ws{display:flex;flex:1;overflow:hidden}
+
+/* Tree */
+#tree{width:240px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border);padding:4px 0}
+.t-sec{padding:10px 12px 2px;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.t-folder{display:block;width:100%;background:none;border:none;text-align:left;
+  font-family:inherit;font-size:12px;color:var(--muted);cursor:pointer;
+  padding:2px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-folder:hover{background:var(--accent-light);color:var(--accent)}
+.t-rec{display:block;width:100%;background:none;border:none;text-align:left;
+  font-family:inherit;font-size:12px;color:var(--text);cursor:pointer;
+  padding:2px 12px 2px 24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border-left:2px solid transparent}
+.t-rec:hover{background:var(--accent-light)}
+.t-rec.sel{background:var(--accent-light);color:var(--accent);border-left-color:var(--accent)!important}
+.t-ent{display:block;width:100%;background:none;border:none;text-align:left;
+  font-family:inherit;font-size:12px;color:var(--muted);cursor:pointer;
+  padding:2px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border-left:2px solid transparent}
+.t-ent:hover,.t-ent.sel{background:var(--accent-light);color:var(--accent)}
+.t-empty{padding:2px 24px;font-size:11px;color:var(--dim)}
+.ec0{border-left-color:var(--ec0)!important}.ec1{border-left-color:var(--ec1)!important}
+.ec2{border-left-color:var(--ec2)!important}.ec3{border-left-color:var(--ec3)!important}
+.ec4{border-left-color:var(--ec4)!important}
+
+/* Right column */
+#rc{display:flex;flex-direction:column;flex:1;overflow:hidden}
+#main{flex:1;overflow-y:auto;padding:20px 24px}
+
+/* Pending */
+#pend{border-top:1px solid var(--border);background:var(--bg2);
+  padding:10px 16px;max-height:200px;overflow-y:auto;flex-shrink:0;display:none}
+.p-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px}
+.acard{border:1px solid var(--border);background:var(--bg);padding:8px 12px;
+  margin-bottom:6px;display:flex;align-items:flex-start;gap:10px}
+.abadge{font-size:10px;background:var(--bg2);border:1px solid var(--border);
+  padding:1px 5px;color:var(--muted);flex-shrink:0;margin-top:2px;white-space:nowrap}
+.adesc{flex:1;font-size:12px}
+.abtns{display:flex;gap:6px;flex-shrink:0}
+.bok{color:var(--ok);border:1px solid var(--ok);background:none;font-family:inherit;
+  font-size:11px;padding:2px 8px;cursor:pointer}
+.bok:hover{background:var(--ok);color:white}
+.bskip{color:var(--muted);border:1px solid var(--border);background:none;
+  font-family:inherit;font-size:11px;padding:2px 8px;cursor:pointer}
+.bskip:hover{background:var(--border)}
+
+/* Command bar */
+#cmd-bar{height:44px;border-top:1px solid var(--border);display:flex;
+  align-items:center;padding:0 16px;flex-shrink:0;background:var(--bg)}
+.cpfx{color:var(--muted);margin-right:8px;font-size:14px;user-select:none}
+#cmd{flex:1;border:none;outline:none;background:transparent;font-family:inherit;font-size:13px;color:var(--text)}
+#cmd:disabled{color:var(--muted)}
+#cstatus{font-size:11px;color:var(--dim);margin-left:8px}
+
+/* Overlay */
+#ov{position:fixed;inset:0;background:var(--bg);display:flex;
+  align-items:center;justify-content:center;z-index:100}
+.ob{width:440px;max-width:90vw}
+.ob-title{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:28px}
+.ob label{display:block;font-size:10px;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--muted);margin-bottom:6px}
+.ob input,.ob textarea{width:100%;border:1px solid var(--border);background:var(--bg);
+  font-family:inherit;font-size:13px;padding:8px;outline:none;color:var(--text);
+  resize:vertical;display:block}
+.ob input:focus,.ob textarea:focus{border-color:var(--accent)}
+.ob .bp{margin-top:14px;background:none;border:1px solid var(--accent);color:var(--accent);
+  font-family:inherit;font-size:11px;padding:6px 20px;cursor:pointer;
+  text-transform:uppercase;letter-spacing:.08em}
+.ob .bp:hover{background:var(--accent);color:white}
+.ob .hint{font-size:11px;color:var(--dim);margin-top:10px}
+.ob .err{font-size:11px;color:var(--danger);margin-top:8px}
+.ob-load{text-align:center;color:var(--muted);font-size:13px}
+
+/* Record detail */
+.rdh{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+  margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center}
+.fg{display:grid;grid-template-columns:130px 1fr;gap:2px 8px}
+.fl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;
+  padding:6px 0;align-self:start}
+.fv{border:1px solid transparent;padding:4px;font-family:inherit;font-size:13px;
+  background:transparent;width:100%}
+.fv:hover{border-color:var(--border)}.fv:focus{border-color:var(--accent);outline:none;background:white}
+.flink{color:var(--accent);cursor:pointer;text-decoration:underline;font-size:13px;padding:4px}
+.ssel{font-size:11px;border:1px solid var(--border);padding:2px 6px;font-family:inherit;
+  background:var(--bg);cursor:pointer;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.rdel{color:var(--danger);font-size:11px;cursor:pointer;border:none;background:none;
+  font-family:inherit;text-decoration:underline;padding:0}
+.notes-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+  margin:20px 0 6px}
+.notes-ta{width:100%;min-height:70px;border:1px solid var(--border);font-family:inherit;
+  font-size:12px;padding:8px;background:var(--bg);resize:vertical;outline:none}
+.notes-ta:focus{border-color:var(--accent)}
+
+/* Entity table */
+.eth{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+  margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center}
+.etbl{width:100%;border-collapse:collapse;font-size:12px}
+.etbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--muted);padding:4px 8px;border-bottom:1px solid var(--border);font-weight:normal}
+.etbl td{padding:2px 8px;border-bottom:1px solid var(--bg2)}
+.etbl td input{border:1px solid transparent;background:transparent;font-family:inherit;
+  font-size:12px;width:100%;padding:2px}
+.etbl td input:hover{border-color:var(--border)}.etbl td input:focus{border-color:var(--accent);outline:none;background:white}
+
+/* Welcome + response */
+.wlc{max-width:560px}
+.wlc .wbiz{font-size:16px;font-weight:bold;letter-spacing:.04em;margin-bottom:6px}
+.wlc .wtype{color:var(--muted);font-size:12px;margin-bottom:20px}
+.wlc ul{list-style:none;margin-bottom:20px}
+.wlc li{color:var(--muted);font-size:12px;padding:1px 0}
+.wlc li::before{content:'· ';color:var(--dim)}
+.wlc .whints{border-top:1px solid var(--border);padding-top:14px}
+.wlc .wh{color:var(--dim);font-size:12px;margin-bottom:3px}
+.wlc .wh span{color:var(--accent)}
+.resp{font-family:inherit;font-size:13px;white-space:pre-wrap;line-height:1.7;
+  color:var(--text);max-width:640px}
+.errbox{border:1px solid var(--danger);padding:12px 16px;color:var(--danger);
+  font-size:12px;max-width:500px}
+
+/* Settings */
+.sett{max-width:420px}
+.sett h2{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+  margin-bottom:20px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.srow{display:grid;grid-template-columns:110px 1fr auto;align-items:center;gap:8px;margin-bottom:10px}
+.slbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.sinp{border:1px solid var(--border);font-family:inherit;font-size:12px;
+  padding:4px 8px;background:var(--bg);outline:none;width:100%}
+.sinp:focus{border-color:var(--accent)}
+.sbtn{font-family:inherit;font-size:11px;padding:3px 10px;border:1px solid var(--border);
+  background:none;cursor:pointer;color:var(--muted);white-space:nowrap}
+.sbtn:hover{border-color:var(--accent);color:var(--accent)}
+.sbtn.d{border-color:var(--danger);color:var(--danger)}
+.sbtn.d:hover{background:var(--danger);color:white}
+.ssec{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+.swarn{font-size:11px;color:var(--warn);margin-top:6px}
+
+.bwarn{color:var(--warn)}.bdanger{color:var(--danger)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ── CONSTANTS ─────────────────────────────────────────── */
+const API = 'https://api.anthropic.com/v1/messages';
+const VER = '2023-06-01';
+const MDL = 'claude-haiku-4-5-20251001';
+const SK  = 'erp1_';
+
+const TOOLS = [
+  { name:'create_record', description:'Create a new record for an entity type.',
+    input_schema:{ type:'object', required:['entity_type','status','id','data'],
+      properties:{ entity_type:{type:'string'}, status:{type:'string',description:'Use "default" for config entities.'}, id:{type:'string'}, data:{type:'object'} }}},
+  { name:'update_record', description:'Update fields on a record. Null value removes the field.',
+    input_schema:{ type:'object', required:['entity_type','id','changes'],
+      properties:{ entity_type:{type:'string'}, id:{type:'string'}, changes:{type:'object'} }}},
+  { name:'move_record', description:'Move a record to a different status bucket.',
+    input_schema:{ type:'object', required:['entity_type','id','new_status'],
+      properties:{ entity_type:{type:'string'}, id:{type:'string'}, new_status:{type:'string'} }}},
+  { name:'delete_record', description:'Permanently delete a record.',
+    input_schema:{ type:'object', required:['entity_type','id'],
+      properties:{ entity_type:{type:'string'}, id:{type:'string'} }}},
+  { name:'extend_ontology', description:'Add a new entity type not already in the ontology.',
+    input_schema:{ type:'object', required:['new_entity_type','description','fields','status_values'],
+      properties:{ new_entity_type:{type:'string'}, description:{type:'string'},
+        fields:{type:'array',items:{type:'string'}},
+        status_values:{type:'array',items:{type:'string'},description:'Empty array for config entities.'} }}},
+  { name:'add_field', description:'Add a field to an existing entity type.',
+    input_schema:{ type:'object', required:['entity_type','field_name'],
+      properties:{ entity_type:{type:'string'}, field_name:{type:'string'} }}},
+  { name:'ask_clarification', description:'Ask the user for more info before acting.',
+    input_schema:{ type:'object', required:['question'], properties:{ question:{type:'string'} }}}
+];
+
+/* ── STATE ─────────────────────────────────────────────── */
+const S = {
+  screen:'onboard_key',
+  apiKey:'', ontology:null, records:{}, treeExp:{}, selItem:null, mainContent:null,
+  history:[], loading:false, pendingActions:[], pendingMsgs:null, pendingAsstContent:null,
+  obErr:'', curCmd:''
+};
+
+/* ── STORAGE ───────────────────────────────────────────── */
+const ls = (k,v) => v!==undefined ? localStorage.setItem(SK+k,v) : localStorage.getItem(SK+k);
+
+function persist(){
+  ls('key', S.apiKey);
+  ls('ont', JSON.stringify(S.ontology));
+  ls('rec', JSON.stringify(S.records));
+  ls('tree', JSON.stringify(S.treeExp));
+  ls('hist', JSON.stringify(S.history.slice(-10)));
+}
+
+function loadState(){
+  S.apiKey = ls('key')||'';
+  const o=ls('ont'); S.ontology=o?JSON.parse(o):null;
+  const r=ls('rec'); S.records=r?JSON.parse(r):{};
+  const t=ls('tree'); S.treeExp=t?JSON.parse(t):{};
+  const h=ls('hist'); S.history=h?JSON.parse(h):[];
+  if(S.apiKey&&S.ontology) S.screen='dashboard';
+  else if(S.apiKey) S.screen='onboard_biz';
+  else S.screen='onboard_key';
+}
+
+/* ── SKELETON ──────────────────────────────────────────── */
+function buildSkeleton(){
+  document.getElementById('app').innerHTML=`
+    <div id="ov"></div>
+    <div id="hdr" style="display:none"></div>
+    <div id="ws" style="display:none">
+      <div id="tree"></div>
+      <div id="rc"><div id="main"></div><div id="pend"></div></div>
+    </div>
+    <div id="cmd-bar" style="display:none">
+      <span class="cpfx">&gt;</span>
+      <input id="cmd" type="text" autocomplete="off" spellcheck="false" placeholder="type a command...">
+      <span id="cstatus"></span>
+    </div>`;
+}
+
+/* ── RENDER ────────────────────────────────────────────── */
+function render(){
+  const ov=document.getElementById('ov');
+  if(S.screen!=='dashboard'){
+    ov.style.display='flex'; ov.innerHTML=renderOv();
+    ['hdr','ws','cmd-bar'].forEach(id=>document.getElementById(id).style.display='none');
+    return;
+  }
+  ov.style.display='none';
+  document.getElementById('hdr').style.display='flex';
+  document.getElementById('ws').style.display='flex';
+  document.getElementById('cmd-bar').style.display='flex';
+  document.getElementById('hdr').innerHTML=renderHdr();
+  document.getElementById('tree').innerHTML=renderTree();
+  document.getElementById('main').innerHTML=renderMain();
+  renderPend();
+  syncCmdBar();
+}
+
+function renderOv(){
+  if(S.screen==='loading') return `<div class="ob"><div class="ob-load">Analyzing your business<span id="dots">...</span></div></div>`;
+  if(S.screen==='onboard_key') return `
+    <div class="ob">
+      <div class="ob-title">Temporary ERP</div>
+      <label>Anthropic API Key</label>
+      <input id="ob-k" type="password" placeholder="sk-ant-..." onkeydown="if(event.key==='Enter')obKey()">
+      <button class="bp" onclick="obKey()">Continue →</button>
+      <div class="hint">Stored only in this browser. Never leaves your device.</div>
+      ${S.obErr?`<div class="err">${esc(S.obErr)}</div>`:''}
+    </div>`;
+  if(S.screen==='onboard_biz') return `
+    <div class="ob">
+      <div class="ob-title">Describe Your Business</div>
+      <label>Website URL or plain description</label>
+      <textarea id="ob-b" rows="5" placeholder="e.g. We are a machine shop doing CNC milling, turning, and fabrication for industrial customers.\n\nor paste your website URL: https://..." onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))obBiz()"></textarea>
+      <button class="bp" onclick="obBiz()">Analyze →</button>
+      <div class="hint">Cmd+Enter to submit</div>
+      ${S.obErr?`<div class="err">${esc(S.obErr)}</div>`:''}
+    </div>`;
+  return '';
+}
+
+function renderHdr(){
+  return `<span class="biz">${esc(S.ontology?.business_name||'')}</span>
+    <div class="hb">
+      <button onclick="openSettings()">settings</button>
+      <button onclick="doReset()">reset</button>
+    </div>`;
+}
+
+function renderTree(){
+  if(!S.ontology) return '';
+  const {entities,primary_workflow:pw}=S.ontology;
+  const parts=[];
+  if(entities[pw]){
+    const ent=entities[pw], ci=eci(pw);
+    parts.push(`<div class="t-sec">${esc(pw)}</div>`);
+    for(const st of ent.status_values||[]){
+      const key=`${pw}/${st}`;
+      const open=S.treeExp[key]!==false;
+      const recs=(S.records[pw]||{})[st]||{};
+      const cnt=Object.keys(recs).length;
+      parts.push(`<button class="t-folder" onclick="toggleF('${ea(key)}')">${open?'▼':'▶'} ${esc(st)} <span style="color:var(--dim)">(${cnt})</span></button>`);
+      if(open){
+        if(!cnt) parts.push(`<div class="t-empty">empty</div>`);
+        else Object.entries(recs).forEach(([id,rec])=>{
+          const sel=S.selItem?.type==='record'&&S.selItem.id===id?' sel':'';
+          parts.push(`<button class="t-rec ec${ci}${sel}" onclick="selRec('${ea(pw)}','${ea(st)}','${ea(id)}')" title="${esc(id)}">${esc(recSum(pw,ent,id,rec))}${dueBadge(rec)}</button>`);
+        });
+      }
+    }
+  }
+  const others=Object.keys(entities).filter(k=>k!==pw);
+  if(others.length){
+    parts.push(`<div class="t-sec" style="margin-top:8px">Config</div>`);
+    others.forEach(n=>{
+      const ci=eci(n), sel=S.selItem?.type==='entity'&&S.selItem.entity===n?' sel':'';
+      const tot=Object.values(S.records[n]||{}).reduce((a,b)=>a+Object.keys(b).length,0);
+      parts.push(`<button class="t-ent ec${ci}${sel}" onclick="selEnt('${ea(n)}')">${esc(n)} <span style="color:var(--dim)">(${tot})</span></button>`);
+    });
+  }
+  return parts.join('');
+}
+
+function renderMain(){
+  const c=S.mainContent;
+  if(!c||c.type==='welcome') return renderWelcome();
+  if(c.type==='response') return renderResp(c.text);
+  if(c.type==='record') return renderRecDetail(c.entity,c.status,c.id);
+  if(c.type==='entity') return renderEntTable(c.entity);
+  if(c.type==='error') return `<div class="errbox">${esc(c.text)}</div>`;
+  if(c.type==='settings') return renderSettings();
+  return renderWelcome();
+}
+
+function renderPend(){
+  const panel=document.getElementById('pend');
+  const items=S.pendingActions.filter(a=>a.state==='pending');
+  if(!items.length){panel.style.display='none';return;}
+  panel.style.display='block';
+  panel.innerHTML=`<div class="p-lbl">Pending Actions</div>`+
+    items.map(a=>`
+      <div class="acard">
+        <span class="abadge">${esc(a.tool_name)}</span>
+        <span class="adesc">${esc(a.label)}</span>
+        <div class="abtns">
+          <button class="bok" onclick="confAction('${ea(a.id)}')">✓ confirm</button>
+          <button class="bskip" onclick="skipAction('${ea(a.id)}')">skip</button>
+        </div>
+      </div>`).join('');
+}
+
+function syncCmdBar(){
+  const inp=document.getElementById('cmd');
+  const st=document.getElementById('cstatus');
+  if(!inp) return;
+  inp.disabled=S.loading;
+  st.textContent=S.loading?'...':'';
+  if(!S.loading&&document.activeElement!==inp) inp.focus();
+}
+
+/* ── MAIN PANEL VIEWS ──────────────────────────────────── */
+function renderWelcome(){
+  const o=S.ontology; if(!o) return '';
+  const pri=(o.tracking_priorities||[]).map(p=>`<li>${esc(p)}</li>`).join('');
+  return `<div class="wlc">
+    <div class="wbiz">${esc(o.business_name)}</div>
+    <div class="wtype">${esc(o.business_type)}</div>
+    ${pri?`<ul>${pri}</ul>`:''}
+    <div class="whints">
+      <div class="wh">Try: <span>&gt; add a new ${esc(o.primary_workflow)} for [customer name]</span></div>
+      <div class="wh">     <span>&gt; what ${esc(o.primary_workflow)}s are due this week?</span></div>
+      <div class="wh">     <span>&gt; show me what needs attention</span></div>
+      <div class="wh" style="margin-top:8px">Press <span>/</span> to focus the command bar</div>
+    </div>
+  </div>`;
+}
+
+function renderResp(text){
+  const html=esc(text).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`(.+?)`/g,'<code style="background:var(--bg2);padding:1px 4px">$1</code>');
+  return `<pre class="resp">${html}</pre>`;
+}
+
+function renderRecDetail(entity,status,id){
+  const rec=(S.records[entity]?.[status]?.[id])||{};
+  const oe=S.ontology?.entities?.[entity]||{};
+  const fields=oe.key_fields||Object.keys(rec).filter(k=>!k.startsWith('_'));
+  const sv=oe.status_values||[];
+  const entNames=Object.keys(S.ontology?.entities||{});
+  const ci=eci(entity);
+
+  const rows=fields.map(f=>{
+    const val=rec[f]??'';
+    const refEnt=entNames.find(e=>e!==entity&&(f===e||f===`${e}_id`||f.startsWith(e)));
+    const inp=refEnt
+      ? `<span class="flink" onclick="selEnt('${ea(refEnt)}')">${esc(String(val))}</span>`
+      : `<input class="fv" value="${ea(String(val))}" onblur="saveField('${ea(entity)}','${ea(id)}','${ea(f)}',this.value)">`;
+    return `<div class="fl">${esc(f)}</div><div>${inp}</div>`;
+  }).join('');
+
+  const opts=sv.map(s=>`<option value="${ea(s)}"${s===status?' selected':''}>${esc(s)}</option>`).join('');
+
+  return `<div>
+    <div class="rdh">
+      <span style="color:var(--ec${ci})">${esc(id)}</span>
+      <div style="display:flex;align-items:center;gap:12px">
+        ${sv.length>1?`<select class="ssel" onchange="moveLocal('${ea(entity)}','${ea(id)}',this.value)">${opts}</select>`:''}
+        <button class="rdel" onclick="delDirect('${ea(entity)}','${ea(id)}')">delete</button>
+      </div>
+    </div>
+    <div class="fg">${rows}</div>
+    <div class="notes-lbl">Notes</div>
+    <textarea class="notes-ta" onblur="saveNotes('${ea(entity)}','${ea(id)}',this.value)">${esc(rec._notes||'')}</textarea>
+  </div>`;
+}
+
+function renderEntTable(entity){
+  const oe=S.ontology?.entities?.[entity]||{};
+  const fields=oe.key_fields||[];
+  const buckets=S.records[entity]||{};
+  const all=Object.entries(buckets).flatMap(([st,recs])=>Object.entries(recs).map(([id,r])=>({id,st,...r})));
+  const ci=eci(entity);
+  const ths=['id',...fields].map(f=>`<th>${esc(f)}</th>`).join('');
+  const trs=all.map(({id,st,...r})=>{
+    const cells=['id',...fields].map(f=>
+      f==='id'?`<td><span style="color:var(--ec${ci})">${esc(id)}</span></td>`
+             :`<td><input value="${ea(String(r[f]??''))}" onblur="saveField('${ea(entity)}','${ea(id)}','${ea(f)}',this.value)"></td>`
+    ).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+  return `<div>
+    <div class="eth"><span>${esc(entity)}</span>
+      <button class="sbtn" onclick="addEntRec('${ea(entity)}')">+ add</button></div>
+    <table class="etbl"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+  </div>`;
+}
+
+function renderSettings(){
+  return `<div class="sett">
+    <h2>Settings</h2>
+    <div class="srow">
+      <span class="slbl">API Key</span>
+      <input class="sinp" id="s-key" type="password" value="${ea(S.apiKey)}" placeholder="sk-ant-...">
+      <button class="sbtn" onclick="saveKey()">save</button>
+    </div>
+    <div class="ssec">
+      <div class="srow" style="grid-template-columns:1fr auto">
+        <span class="slbl">Re-analyze business</span>
+        <button class="sbtn" onclick="reanalyze()">re-analyze</button>
+      </div>
+      <div class="swarn">Updates ontology — existing records are preserved.</div>
+    </div>
+    <div class="ssec">
+      <button class="sbtn d" onclick="doReset()">Reset everything</button>
+      <div class="swarn">Deletes all records and ontology from local storage.</div>
+    </div>
+  </div>`;
+}
+
+/* ── HELPERS ───────────────────────────────────────────── */
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function ea(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
+function eci(n){const ks=Object.keys(S.ontology?.entities||{});return ks.indexOf(n)%5}
+function uid(){return Math.random().toString(36).slice(2,10)}
+
+function recSum(entity,oe,id,rec){
+  const parts=[id];
+  (oe.key_fields||[]).slice(0,2).forEach(f=>{const v=rec[f];if(v)parts.push(String(v).slice(0,14))});
+  return parts.join('  ');
+}
+
+function dueBadge(rec){
+  const due=rec.due_date||rec.due||rec.deadline;
+  if(!due) return '';
+  try{
+    const d=Math.ceil((new Date(due)-Date.now())/86400000);
+    if(d<0) return ' <span class="bdanger">⚠</span>';
+    if(d<=2) return ' <span class="bwarn">!</span>';
+  }catch{}
+  return '';
+}
+
+function nextId(entity){
+  const pfx=entity.replace(/[^a-z]/gi,'').slice(0,3).toUpperCase();
+  const yr=new Date().getFullYear();
+  const cnt=Object.values(S.records[entity]||{}).reduce((a,b)=>a+Object.keys(b).length,0);
+  return `${pfx}-${yr}-${String(cnt+1).padStart(3,'0')}`;
+}
+
+function findBucket(entity,id){
+  for(const b of Object.values(S.records[entity]||{})) if(b[id]!==undefined) return b;
+  return null;
+}
+function findBucketName(entity,id){
+  for(const [n,b] of Object.entries(S.records[entity]||{})) if(b[id]!==undefined) return n;
+  return null;
+}
+
+/* ── TREE INTERACTIONS ─────────────────────────────────── */
+function toggleF(key){
+  S.treeExp[key]=S.treeExp[key]===false?true:false;
+  persist();
+  document.getElementById('tree').innerHTML=renderTree();
+}
+function selRec(entity,status,id){
+  S.selItem={type:'record',entity,status,id};
+  S.mainContent={type:'record',entity,status,id};
+  document.getElementById('tree').innerHTML=renderTree();
+  document.getElementById('main').innerHTML=renderMain();
+}
+function selEnt(entity){
+  S.selItem={type:'entity',entity};
+  S.mainContent={type:'entity',entity};
+  document.getElementById('tree').innerHTML=renderTree();
+  document.getElementById('main').innerHTML=renderMain();
+}
+
+/* ── DIRECT MUTATIONS ──────────────────────────────────── */
+function saveField(entity,id,field,value){
+  const b=findBucket(entity,id); if(!b) return;
+  b[id][field]=value; persist();
+}
+function saveNotes(entity,id,value){
+  const b=findBucket(entity,id); if(!b) return;
+  b[id]._notes=value; persist();
+}
+function moveLocal(entity,id,newStatus){
+  const bn=findBucketName(entity,id); if(!bn||bn===newStatus) return;
+  const rec=S.records[entity][bn][id];
+  delete S.records[entity][bn][id];
+  if(!S.records[entity][newStatus]) S.records[entity][newStatus]={};
+  S.records[entity][newStatus][id]=rec;
+  S.selItem={type:'record',entity,status:newStatus,id};
+  S.mainContent={type:'record',entity,status:newStatus,id};
+  persist(); render();
+}
+function delDirect(entity,id){
+  if(!confirm(`Delete ${id}? This cannot be undone.`)) return;
+  const bn=findBucketName(entity,id);
+  if(bn) delete S.records[entity][bn][id];
+  S.selItem=null; S.mainContent={type:'welcome'};
+  persist(); render();
+}
+function addEntRec(entity){
+  const id=nextId(entity);
+  if(!S.records[entity]) S.records[entity]={};
+  if(!S.records[entity]['default']) S.records[entity]['default']={};
+  S.records[entity]['default'][id]={};
+  persist(); selEnt(entity);
+}
+function saveKey(){
+  const k=document.getElementById('s-key')?.value?.trim();
+  if(k){S.apiKey=k;persist();}
+  S.mainContent={type:'welcome'}; render();
+}
+function openSettings(){S.mainContent={type:'settings'};document.getElementById('main').innerHTML=renderMain();}
+function doReset(){
+  if(!confirm('Reset everything? All records and ontology will be deleted.')) return;
+  localStorage.clear(); location.reload();
+}
+async function reanalyze(){
+  const desc=prompt('Describe your business (or paste URL):');
+  if(!desc) return;
+  S.screen='loading'; render();
+  const di=startDots();
+  try{
+    let text=desc;
+    if(desc.startsWith('http')){const f=await fetchUrl(desc);text=f||desc;}
+    S.ontology=await inferOntology(text);
+    ensureBuckets(); S.screen='dashboard'; S.mainContent={type:'welcome'};
+    persist(); clearInterval(di); render();
+  }catch(e){
+    clearInterval(di); S.screen='dashboard';
+    S.mainContent={type:'error',text:'Re-analysis failed: '+e.message}; render();
+  }
+}
+
+/* ── ONBOARDING ────────────────────────────────────────── */
+function obKey(){
+  const k=document.getElementById('ob-k')?.value?.trim();
+  if(!k){S.obErr='Please enter your API key.';render();return;}
+  S.apiKey=k; S.obErr=''; S.screen='onboard_biz'; persist(); render();
+  setTimeout(()=>document.getElementById('ob-b')?.focus(),50);
+}
+
+async function obBiz(){
+  const raw=document.getElementById('ob-b')?.value?.trim();
+  if(!raw){S.obErr='Please describe your business.';render();return;}
+  S.obErr=''; S.screen='loading'; render();
+  const di=startDots();
+  let text=raw;
+  if(raw.startsWith('http')){const f=await fetchUrl(raw);text=f||raw;}
+  try{
+    S.ontology=await inferOntology(text);
+    ensureBuckets();
+    S.screen='dashboard'; S.mainContent={type:'welcome'};
+    persist(); clearInterval(di); render();
+    setTimeout(()=>document.getElementById('cmd')?.focus(),100);
+  }catch(e){
+    clearInterval(di); S.screen='onboard_biz';
+    S.obErr='Error: '+(e.message||'Analysis failed.'); render();
+  }
+}
+
+function startDots(){
+  let n=3;
+  return setInterval(()=>{
+    const el=document.getElementById('dots');
+    if(el){n=n>=6?3:n+1;el.textContent='.'.repeat(n);}
+  },400);
+}
+
+async function fetchUrl(url){
+  try{
+    const r=await fetch(url,{signal:AbortSignal.timeout(8000)});
+    const html=await r.text();
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    ['script','style','nav','footer','header'].forEach(t=>doc.querySelectorAll(t).forEach(e=>e.remove()));
+    return (doc.body?.innerText||'').replace(/\s+/g,' ').slice(0,6000);
+  }catch{return null;}
+}
+
+async function inferOntology(bizText){
+  const prompt=`Analyze this business and return a JSON ontology for a minimal tracking system.
+
+Business:
+---
+${bizText}
+---
+
+Return ONLY a valid JSON object with this structure:
+{
+  "business_name": "short name",
+  "business_type": "one phrase",
+  "entities": {
+    "<entity_name>": {
+      "description": "one sentence",
+      "key_fields": ["field1","field2","field3","field4"],
+      "status_values": ["status1","status2","status3"],
+      "workflows": ["status1 → status2"]
+    }
+  },
+  "primary_workflow": "<entity that drives the business>",
+  "tracking_priorities": ["priority1","priority2","priority3"],
+  "generated_at": "${new Date().toISOString()}"
+}
+
+Rules: 2-5 entities, 4-8 key_fields each, realistic statuses for primary workflow, empty status_values [] for config/registry entities, return ONLY JSON.`;
+
+  const resp=await callClaude([{role:'user',content:prompt}],
+    {system:'You are a business analyst. Return only valid JSON.',max_tokens:2048});
+  let raw=(resp.content[0]?.text||'').trim().replace(/^```[a-z]*\n?/,'').replace(/\n?```$/,'');
+  try{return JSON.parse(raw);}
+  catch{
+    const fix=await callClaude(
+      [{role:'user',content:prompt},{role:'assistant',content:raw},
+       {role:'user',content:'Invalid JSON. Return only the JSON object, nothing else.'}],
+      {system:'Return only valid JSON.',max_tokens:2048});
+    let r2=(fix.content[0]?.text||'').trim().replace(/^```[a-z]*\n?/,'').replace(/\n?```$/,'');
+    return JSON.parse(r2);
+  }
+}
+
+function ensureBuckets(){
+  for(const [name,ent] of Object.entries(S.ontology.entities||{})){
+    if(!S.records[name]) S.records[name]={};
+    const bs=ent.status_values?.length?ent.status_values:['default'];
+    bs.forEach(b=>{if(!S.records[name][b])S.records[name][b]={};});
+  }
+}
+
+/* ── CLAUDE API ────────────────────────────────────────── */
+async function callClaude(messages,opts={}){
+  const body={model:opts.model||MDL,max_tokens:opts.max_tokens||1024,messages};
+  if(opts.system) body.system=opts.system;
+  if(opts.tools) body.tools=opts.tools;
+  if(opts.tool_choice) body.tool_choice=opts.tool_choice;
+
+  const r=await fetch(API,{method:'POST',
+    headers:{'x-api-key':S.apiKey,'anthropic-version':VER,'content-type':'application/json',
+      'anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify(body)});
+
+  if(!r.ok){
+    const e=await r.json().catch(()=>({}));
+    const err=new Error(e?.error?.message||r.statusText);
+    err.status=r.status; throw err;
+  }
+  return r.json();
+}
+
+function buildSysPrompt(){
+  const o=S.ontology; if(!o) return '';
+  const summary={};
+  for(const [entity,buckets] of Object.entries(S.records)){
+    summary[entity]={};
+    for(const [st,recs] of Object.entries(buckets)){
+      const ids=Object.keys(recs);
+      summary[entity][st]={count:ids.length,records:Object.fromEntries(ids.slice(0,12).map(id=>[id,recs[id]]))};
+    }
+  }
+  return `You are the operating intelligence for ${o.business_name}, a ${o.business_type}.
+
+ONTOLOGY:
+${JSON.stringify(o,null,2)}
+
+CURRENT STATE:
+${JSON.stringify(summary,null,2)}
+
+INSTRUCTIONS:
+- Call tool(s) to carry out the user's command. Use ask_clarification if ambiguous.
+- If user references a new entity type, call extend_ontology. New field → call add_field.
+- Record IDs: PREFIX-YEAR-NNN (e.g. JOB-2024-001). Count existing records for NNN.
+- Only use status values defined in the ontology. Config entities use status "default".
+- After tool results, reply with a 1-3 sentence plain-text summary.
+- Keep responses short and direct.
+
+PRIORITIES:
+${(o.tracking_priorities||[]).map(p=>`- ${p}`).join('\n')}`;
+}
+
+/* ── COMMAND ───────────────────────────────────────────── */
+function setupCmd(){
+  document.getElementById('cmd').addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!S.loading){
+      const v=e.target.value.trim(); if(!v) return;
+      e.target.value=''; handleCmd(v);
+    }
+  });
+}
+
+async function handleCmd(text){
+  S.loading=true; S.curCmd=text; syncCmdBar();
+  const msgs=buildMsgs(text);
+  let resp;
+  try{resp=await callClaude(msgs,{system:buildSysPrompt(),tools:TOOLS,tool_choice:{type:'auto'},max_tokens:2048});}
+  catch(e){handleErr(e);return;}
+
+  const tools=resp.content.filter(b=>b.type==='tool_use');
+  const texts=resp.content.filter(b=>b.type==='text');
+  const txt=texts.map(b=>b.text).join('\n');
+
+  if(!tools.length){
+    S.history.push({role:'user',text});
+    S.history.push({role:'assistant',text:txt});
+    S.mainContent={type:'response',text:txt};
+    S.loading=false; persist(); render(); return;
+  }
+
+  S.pendingMsgs=msgs;
+  S.pendingAsstContent=resp.content;
+  if(txt) S.mainContent={type:'response',text:txt};
+  S.pendingActions=tools.map(b=>({
+    id:uid(), tool_use_id:b.id, tool_name:b.name,
+    input:b.input, label:descAction(b.name,b.input),
+    state:'pending', result:null
+  }));
+  S.loading=false; persist(); render();
+}
+
+function buildMsgs(userText){
+  let recent=S.history.slice(-4);
+  while(recent.length&&recent[0].role!=='user') recent=recent.slice(1);
+  const msgs=recent.map(h=>({role:h.role,content:h.text}));
+  msgs.push({role:'user',content:userText});
+  return msgs;
+}
+
+function handleErr(e){
+  S.loading=false;
+  let msg=e.message||'Unknown error';
+  if(e.status===401) msg='Invalid API key (401). Open settings to update it.';
+  else if(e.status===429) msg='Rate limited (429). Wait a moment and try again.';
+  else if(e.status>=500) msg=`Anthropic API error (${e.status}). Try again.`;
+  S.mainContent={type:'error',text:msg}; render();
+}
+
+/* ── ACTIONS ───────────────────────────────────────────── */
+function descAction(tool,inp){
+  switch(tool){
+    case 'create_record':   return `Create ${inp.entity_type} ${inp.id} — ${JSON.stringify(inp.data||{}).slice(0,80)}`;
+    case 'update_record':   return `Update ${inp.entity_type} ${inp.id}: ${Object.keys(inp.changes||{}).join(', ')}`;
+    case 'move_record':     return `Move ${inp.entity_type} ${inp.id} → ${inp.new_status}`;
+    case 'delete_record':   return `Delete ${inp.entity_type} ${inp.id}`;
+    case 'extend_ontology': return `Add entity type "${inp.new_entity_type}" — ${inp.description}`;
+    case 'add_field':       return `Add field "${inp.field_name}" to ${inp.entity_type}`;
+    case 'ask_clarification': return inp.question;
+    default: return `${tool} — ${JSON.stringify(inp).slice(0,80)}`;
+  }
+}
+
+async function confAction(actionId){
+  const a=S.pendingActions.find(x=>x.id===actionId);
+  if(!a||a.state!=='pending') return;
+  a.state='running'; renderPend();
+  try{a.result=await execAction(a);a.state='done';}
+  catch(e){a.result={error:e.message};a.state='done';}
+  persist();
+  document.getElementById('tree').innerHTML=renderTree();
+  document.getElementById('main').innerHTML=renderMain();
+  await finishQueue();
+}
+
+function skipAction(actionId){
+  const a=S.pendingActions.find(x=>x.id===actionId);
+  if(!a||a.state!=='pending') return;
+  a.state='skipped'; a.result={skipped:true};
+  renderPend(); finishQueue();
+}
+
+async function execAction(a){
+  const {tool_name:tool,input:inp}=a;
+  switch(tool){
+    case 'create_record':{
+      if(!S.records[inp.entity_type]) S.records[inp.entity_type]={};
+      if(!S.records[inp.entity_type][inp.status]) S.records[inp.entity_type][inp.status]={};
+      S.records[inp.entity_type][inp.status][inp.id]=inp.data||{};
+      return {created:inp.id};
+    }
+    case 'update_record':{
+      const b=findBucket(inp.entity_type,inp.id);
+      if(!b) return {error:'record not found'};
+      for(const [k,v] of Object.entries(inp.changes||{})){
+        if(v===null) delete b[inp.id][k]; else b[inp.id][k]=v;
+      }
+      return {updated:inp.id};
+    }
+    case 'move_record':{
+      const bn=findBucketName(inp.entity_type,inp.id);
+      if(!bn) return {error:'record not found'};
+      const rec=S.records[inp.entity_type][bn][inp.id];
+      delete S.records[inp.entity_type][bn][inp.id];
+      if(!S.records[inp.entity_type][inp.new_status]) S.records[inp.entity_type][inp.new_status]={};
+      S.records[inp.entity_type][inp.new_status][inp.id]=rec;
+      if(S.selItem?.id===inp.id){
+        S.selItem.status=inp.new_status;
+        S.mainContent={type:'record',entity:inp.entity_type,status:inp.new_status,id:inp.id};
+      }
+      return {moved:inp.id,to:inp.new_status};
+    }
+    case 'delete_record':{
+      const bn=findBucketName(inp.entity_type,inp.id);
+      if(bn) delete S.records[inp.entity_type][bn][inp.id];
+      if(S.selItem?.id===inp.id){S.selItem=null;S.mainContent={type:'welcome'};}
+      return {deleted:inp.id};
+    }
+    case 'extend_ontology':{
+      if(!S.ontology.entities[inp.new_entity_type]){
+        S.ontology.entities[inp.new_entity_type]={
+          description:inp.description, key_fields:inp.fields||[],
+          status_values:inp.status_values||[], workflows:[]
+        };
+        S.records[inp.new_entity_type]={};
+        (inp.status_values?.length?inp.status_values:['default']).forEach(b=>{S.records[inp.new_entity_type][b]={};});
+      }
+      return {added:inp.new_entity_type};
+    }
+    case 'add_field':{
+      const ent=S.ontology.entities[inp.entity_type];
+      if(ent&&!ent.key_fields.includes(inp.field_name)) ent.key_fields.push(inp.field_name);
+      return {added_field:inp.field_name};
+    }
+    case 'ask_clarification':{
+      S.mainContent={type:'response',text:inp.question};
+      document.getElementById('main').innerHTML=renderMain();
+      return {displayed:true};
+    }
+    default: return {unknown:tool};
+  }
+}
+
+async function finishQueue(){
+  if(S.pendingActions.some(a=>a.state==='pending')) return;
+  const toolResults=S.pendingActions.map(a=>({
+    type:'tool_result', tool_use_id:a.tool_use_id,
+    content:JSON.stringify(a.result||{ok:true})
+  }));
+  const msgs=[...S.pendingMsgs,{role:'assistant',content:S.pendingAsstContent},{role:'user',content:toolResults}];
+
+  S.loading=true; renderPend(); syncCmdBar();
+  let final;
+  try{final=await callClaude(msgs,{system:buildSysPrompt(),max_tokens:1024});}
+  catch(e){
+    handleErr(e);
+    S.pendingActions=[];S.pendingMsgs=null;S.pendingAsstContent=null;
+    renderPend(); return;
+  }
+  const finalText=final.content.filter(b=>b.type==='text').map(b=>b.text).join('\n');
+  S.history.push({role:'user',text:S.curCmd});
+  S.history.push({role:'assistant',text:finalText});
+  S.mainContent={type:'response',text:finalText};
+  S.pendingActions=[];S.pendingMsgs=null;S.pendingAsstContent=null;
+  S.loading=false;S.curCmd='';
+  persist(); render();
+}
+
+/* ── INIT ──────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded',()=>{
+  buildSkeleton(); loadState(); render(); setupCmd();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='/'&&document.activeElement?.id!=='cmd'&&S.screen==='dashboard'){
+    e.preventDefault(); document.getElementById('cmd')?.focus();
+  }
+});
+</script>
+</body>
+</html>
