@@ -28,31 +28,40 @@ body{font-family:'Menlo','Consolas','Courier New',monospace;font-size:13px;line-
 /* Workspace */
 #ws{display:flex;flex:1;overflow:hidden;padding-bottom:44px}
 
-/* Tree */
-#tree{width:240px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border);padding:4px 0}
-.t-sec{padding:10px 12px 2px;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
-.t-folder{display:block;width:100%;background:none;border:none;text-align:left;
-  font-family:inherit;font-size:12px;color:var(--muted);cursor:pointer;
-  padding:2px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.t-folder:hover{background:var(--accent-light);color:var(--accent)}
+/* Panels (replaces tree) */
+#tree{display:flex;flex-direction:row;flex-shrink:0;overflow-x:auto;max-width:55vw}
+#rc{display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:280px}
+.panel{width:220px;flex-shrink:0;border-right:1px solid var(--border);
+  overflow-y:auto;display:flex;flex-direction:column}
+.panel-hdr{height:30px;display:flex;align-items:center;gap:4px;padding:0 10px;
+  border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg2)}
+.panel-back{background:none;border:none;color:var(--muted);cursor:pointer;
+  font-family:inherit;font-size:14px;padding:0 4px 0 0;line-height:1;flex-shrink:0}
+.panel-back:hover{color:var(--accent)}
+.panel-title{font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panel-chip{font-size:10px;color:var(--accent);background:var(--accent-light);
+  padding:1px 4px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;max-width:70px}
+.t-sec{padding:8px 10px 2px;font-size:10px;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--muted)}
 .t-rec{display:block;width:100%;background:none;border:none;text-align:left;
   font-family:inherit;font-size:12px;color:var(--text);cursor:pointer;
-  padding:2px 12px 2px 24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  padding:2px 10px 2px 18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   border-left:2px solid transparent}
 .t-rec:hover{background:var(--accent-light)}
 .t-rec.sel{background:var(--accent-light);color:var(--accent);border-left-color:var(--accent)!important}
 .t-ent{display:block;width:100%;background:none;border:none;text-align:left;
   font-family:inherit;font-size:12px;color:var(--muted);cursor:pointer;
-  padding:2px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  padding:2px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   border-left:2px solid transparent}
 .t-ent:hover,.t-ent.sel{background:var(--accent-light);color:var(--accent)}
-.t-empty{padding:2px 24px;font-size:11px;color:var(--dim)}
+.t-empty{padding:2px 18px;font-size:11px;color:var(--dim)}
+.t-child-arrow{color:var(--dim);font-size:10px;float:right;margin-top:2px}
 .ec0{border-left-color:var(--ec0)!important}.ec1{border-left-color:var(--ec1)!important}
 .ec2{border-left-color:var(--ec2)!important}.ec3{border-left-color:var(--ec3)!important}
 .ec4{border-left-color:var(--ec4)!important}
 
-/* Right column */
-#rc{display:flex;flex-direction:column;flex:1;overflow:hidden}
 #main{flex:1;overflow-y:auto;padding:20px 24px}
 
 /* Pending */
@@ -230,9 +239,10 @@ const TOOLS = [
 /* ── STATE ─────────────────────────────────────────────── */
 const S = {
   screen:'onboard_key',
-  apiKey:'', ontology:null, records:{}, treeExp:{}, selItem:null, mainContent:null,
+  apiKey:'', ontology:null, records:{}, selItem:null, mainContent:null,
   history:[], loading:false, pendingActions:[], pendingMsgs:null, pendingAsstContent:null,
-  obErr:'', curCmd:'', attachment:null
+  obErr:'', curCmd:'', attachment:null,
+  panels:[], views:[]
 };
 
 /* ── STORAGE ───────────────────────────────────────────── */
@@ -242,16 +252,16 @@ function persist(){
   ls('key', S.apiKey);
   ls('ont', JSON.stringify(S.ontology));
   ls('rec', JSON.stringify(S.records));
-  ls('tree', JSON.stringify(S.treeExp));
   ls('hist', JSON.stringify(S.history.slice(-10)));
+  ls('views', JSON.stringify(S.views||[]));
 }
 
 function loadState(){
   S.apiKey = ls('key')||'';
   const o=ls('ont'); S.ontology=o?JSON.parse(o):null;
   const r=ls('rec'); S.records=r?JSON.parse(r):{};
-  const t=ls('tree'); S.treeExp=t?JSON.parse(t):{};
   const h=ls('hist'); S.history=h?JSON.parse(h):[];
+  const v=ls('views'); S.views=v?JSON.parse(v):[];
   if(S.apiKey&&S.ontology) S.screen='dashboard';
   else if(S.apiKey) S.screen='onboard_biz';
   else S.screen='onboard_key';
@@ -292,7 +302,7 @@ function render(){
   document.getElementById('ws').style.display='flex';
   document.getElementById('cmd-bar').style.display='flex';
   document.getElementById('hdr').innerHTML=renderHdr();
-  document.getElementById('tree').innerHTML=renderTree();
+  renderPanels();
   document.getElementById('main').innerHTML=renderMain();
   renderPend();
   syncCmdBar();
@@ -329,38 +339,126 @@ function renderHdr(){
     </div>`;
 }
 
-function renderTree(){
-  if(!S.ontology) return '';
-  const {entities,primary_workflow:pw}=S.ontology;
-  const parts=[];
-  if(entities[pw]){
-    const ent=entities[pw], ci=eci(pw);
-    parts.push(`<div class="t-sec">${esc(pw)}</div>`);
-    for(const st of ent.status_values||[]){
-      const key=`${pw}/${st}`;
-      const open=S.treeExp[key]!==false;
-      const recs=(S.records[pw]||{})[st]||{};
-      const cnt=Object.keys(recs).length;
-      parts.push(`<button class="t-folder" onclick="toggleF('${ea(key)}')">${open?'▼':'▶'} ${esc(st)} <span style="color:var(--dim)">(${cnt})</span></button>`);
-      if(open){
-        if(!cnt) parts.push(`<div class="t-empty">empty</div>`);
-        else Object.entries(recs).forEach(([id,rec])=>{
-          const sel=S.selItem?.type==='record'&&S.selItem.id===id?' sel':'';
-          parts.push(`<button class="t-rec ec${ci}${sel}" onclick="selRec('${ea(pw)}','${ea(st)}','${ea(id)}')" title="${esc(id)}">${esc(recSum(pw,ent,id,rec))}${dueBadge(rec)}</button>`);
-        });
+/* ── RELATIONSHIPS ─────────────────────────────────────── */
+function buildRelationships(){
+  const ents=S.ontology?.entities||{};
+  const childrenOf={}, parentOf={};
+  for(const [name,ent] of Object.entries(ents)){
+    for(const field of ent.key_fields||[]){
+      const m=field.match(/^(.+)_id$/);
+      if(m&&ents[m[1]]){
+        const par=m[1];
+        if(!childrenOf[par]) childrenOf[par]=[];
+        childrenOf[par].push({entity:name,field});
+        parentOf[name]=par;
       }
     }
   }
-  const others=Object.keys(entities).filter(k=>k!==pw);
-  if(others.length){
-    parts.push(`<div class="t-sec" style="margin-top:8px">Config</div>`);
-    others.forEach(n=>{
-      const ci=eci(n), sel=S.selItem?.type==='entity'&&S.selItem.entity===n?' sel':'';
-      const tot=Object.values(S.records[n]||{}).reduce((a,b)=>a+Object.keys(b).length,0);
-      parts.push(`<button class="t-ent ec${ci}${sel}" onclick="selEnt('${ea(n)}')">${esc(n)} <span style="color:var(--dim)">(${tot})</span></button>`);
-    });
+  const rootEntities=Object.keys(ents).filter(n=>!parentOf[n]);
+  return {childrenOf,parentOf,rootEntities};
+}
+
+/* ── PANELS ────────────────────────────────────────────── */
+function initPanels(){
+  if(S.panels.length>0) return;
+  S.panels=[{type:'root'}];
+}
+
+function renderPanels(){
+  const container=document.getElementById('tree');
+  if(!container||!S.ontology) return;
+  initPanels();
+  container.innerHTML=S.panels.map((p,i)=>renderOnePanel(p,i)).join('');
+}
+
+function renderOnePanel(panel,idx){
+  const {childrenOf}=buildRelationships();
+  const parts=[`<div class="panel">`];
+
+  if(panel.type==='root'){
+    parts.push(`<div class="panel-hdr"><span class="panel-title">${esc(S.ontology.business_name||'records')}</span></div>`);
+    const {entities,primary_workflow:pw}=S.ontology;
+    if(entities[pw]){
+      const ent=entities[pw], ci=eci(pw);
+      const hasKids=!!childrenOf[pw];
+      parts.push(`<div class="t-sec">${esc(pw)}</div>`);
+      for(const st of ent.status_values||[]){
+        const recs=(S.records[pw]||{})[st]||{};
+        const cnt=Object.keys(recs).length;
+        if(!cnt){parts.push(`<div class="t-empty" style="padding-left:10px">${esc(st)}: empty</div>`);continue;}
+        parts.push(`<div class="t-sec" style="padding-top:4px;padding-bottom:0">${esc(st)}</div>`);
+        Object.entries(recs).forEach(([id,rec])=>{
+          const sel=S.selItem?.id===id?' sel':'';
+          const arrow=hasKids?`<span class="t-child-arrow">›</span>`:'';
+          parts.push(`<button class="t-rec ec${ci}${sel}" onclick="clickPanelRecord(${idx},'${ea(pw)}','${ea(st)}','${ea(id)}')" title="${esc(id)}">${esc(recSum(pw,ent,id,rec))}${dueBadge(rec)}${arrow}</button>`);
+        });
+      }
+    }
+    const others=Object.keys(entities).filter(k=>k!==S.ontology.primary_workflow&&!buildRelationships().parentOf[k]);
+    if(others.length){
+      parts.push(`<div class="t-sec" style="margin-top:8px">Config</div>`);
+      others.forEach(n=>{
+        const ci=eci(n), sel=S.selItem?.type==='entity'&&S.selItem.entity===n?' sel':'';
+        const tot=Object.values(S.records[n]||{}).reduce((a,b)=>a+Object.keys(b).length,0);
+        parts.push(`<button class="t-ent ec${ci}${sel}" onclick="selEnt('${ea(n)}')">${esc(n)} <span style="color:var(--dim)">(${tot})</span></button>`);
+      });
+    }
+    if(S.views?.length){
+      parts.push(`<div class="t-sec" style="margin-top:8px">Views</div>`);
+      S.views.forEach(v=>{
+        const sel=S.mainContent?.type==='view'&&S.mainContent?.viewId===v.id?' sel':'';
+        parts.push(`<button class="t-ent${sel}" onclick="runView('${ea(v.id)}')" title="${esc(v.name)}">${esc(v.name)}</button>`);
+      });
+    }
+  } else {
+    // Child panel
+    const {entity,filterId,filterField,label}=panel;
+    const ent=S.ontology.entities[entity]||{}, ci=eci(entity);
+    const hasKids=!!childrenOf[entity];
+    parts.push(`<div class="panel-hdr">
+      <button class="panel-back" onclick="popPanels(${idx})">←</button>
+      <span class="panel-title">${esc(entity)}</span>
+      <span class="panel-chip">${esc(label||filterId)}</span>
+    </div>`);
+    const statuses=ent.status_values?.length?ent.status_values:['default'];
+    let anyRec=false;
+    for(const st of statuses){
+      const bucket=(S.records[entity]||{})[st]||{};
+      const filtered=Object.entries(bucket).filter(([,rec])=>!filterField||rec[filterField]===filterId);
+      if(!filtered.length) continue;
+      anyRec=true;
+      parts.push(`<div class="t-sec">${esc(st)}</div>`);
+      filtered.forEach(([id,rec])=>{
+        const sel=S.selItem?.id===id?' sel':'';
+        const arrow=hasKids?`<span class="t-child-arrow">›</span>`:'';
+        parts.push(`<button class="t-rec ec${ci}${sel}" onclick="clickPanelRecord(${idx},'${ea(entity)}','${ea(st)}','${ea(id)}')" title="${esc(id)}">${esc(recSum(entity,ent,id,rec))}${dueBadge(rec)}${arrow}</button>`);
+      });
+    }
+    if(!anyRec) parts.push(`<div class="t-empty" style="padding:8px 10px">no records</div>`);
   }
+
+  parts.push('</div>');
   return parts.join('');
+}
+
+function clickPanelRecord(panelIdx,entity,status,id){
+  S.selItem={type:'record',entity,status,id};
+  S.mainContent={type:'record',entity,status,id};
+  // Truncate any panels that opened from a deeper level
+  S.panels=S.panels.slice(0,panelIdx+1);
+  // Open child panels if this entity has children
+  const {childrenOf}=buildRelationships();
+  const kids=childrenOf[entity]||[];
+  kids.forEach(({entity:ce,field})=>{
+    S.panels.push({type:'child',entity:ce,filterId:id,filterField:field,label:id});
+  });
+  renderPanels();
+  document.getElementById('main').innerHTML=renderMain();
+}
+
+function popPanels(fromIdx){
+  S.panels=S.panels.slice(0,fromIdx);
+  renderPanels();
 }
 
 function renderMain(){
@@ -371,6 +469,16 @@ function renderMain(){
   if(c.type==='entity') return renderEntTable(c.entity);
   if(c.type==='error') return `<div class="errbox">${esc(c.text)}</div>`;
   if(c.type==='settings') return renderSettings();
+  if(c.type==='view'){
+    const view=(S.views||[]).find(v=>v.id===c.viewId);
+    if(!view) return `<div class="errbox">View not found</div>`;
+    try{
+      const fn=new Function('records','ontology',view.fn);
+      return fn(S.records,S.ontology);
+    }catch(e){
+      return `<div class="errbox">View error: ${esc(e.message)}</div>`;
+    }
+  }
   return renderWelcome();
 }
 
@@ -565,22 +673,23 @@ function findBucketName(entity,id){
   return null;
 }
 
-/* ── TREE INTERACTIONS ─────────────────────────────────── */
-function toggleF(key){
-  S.treeExp[key]=S.treeExp[key]===false?true:false;
-  persist();
-  document.getElementById('tree').innerHTML=renderTree();
-}
+/* ── PANEL INTERACTIONS ────────────────────────────────── */
 function selRec(entity,status,id){
   S.selItem={type:'record',entity,status,id};
   S.mainContent={type:'record',entity,status,id};
-  document.getElementById('tree').innerHTML=renderTree();
+  renderPanels();
   document.getElementById('main').innerHTML=renderMain();
 }
 function selEnt(entity){
   S.selItem={type:'entity',entity};
   S.mainContent={type:'entity',entity};
-  document.getElementById('tree').innerHTML=renderTree();
+  renderPanels();
+  document.getElementById('main').innerHTML=renderMain();
+}
+function runView(viewId){
+  S.selItem={type:'view',viewId};
+  S.mainContent={type:'view',viewId};
+  renderPanels();
   document.getElementById('main').innerHTML=renderMain();
 }
 
@@ -781,8 +890,10 @@ INSTRUCTIONS:
 - If user references a new entity type, call extend_ontology. New field → call add_field.
 - Record IDs: PREFIX-YEAR-NNN (e.g. JOB-2024-001). Count existing records for NNN.
 - Only use status values defined in the ontology. Config entities use status "default".
+- Parent-child relationships: if entity B has a field like "purchase_order_id", it is a child of purchase_order. Always set that field when creating child records.
 - After tool results, reply with a 1-3 sentence plain-text summary.
 - Keep responses short and direct.
+- User can generate custom views by typing: make view: [description]
 
 PRIORITIES:
 ${(o.tracking_priorities||[]).map(p=>`- ${p}`).join('\n')}`;
@@ -836,8 +947,56 @@ function setupCmd(){
   });
 }
 
+async function makeView(description){
+  S.loading=true; syncCmdBar();
+  S.mainContent={type:'response',text:`Generating view: "${description}"…`};
+  document.getElementById('main').innerHTML=renderMain();
+  const dataSample={};
+  for(const [entity,buckets] of Object.entries(S.records)){
+    dataSample[entity]={};
+    for(const [st,recs] of Object.entries(buckets))
+      dataSample[entity][st]=Object.entries(recs).slice(0,5).map(([id,r])=>({id,...r}));
+  }
+  const prompt=`Generate a JavaScript function body for a custom view in a browser-based ERP system.
+
+Ontology:
+${JSON.stringify(S.ontology,null,2)}
+
+Sample data:
+${JSON.stringify(dataSample,null,2)}
+
+View request: "${description}"
+
+Write the body of a function that receives (records, ontology) and returns an HTML string.
+- records: {entityType: {status: {id: recordObject}}}
+- Use only vanilla JS and HTML. No external libraries.
+- CSS variables available: var(--bg), var(--bg2), var(--border), var(--text), var(--muted), var(--accent), var(--accent-light), var(--ok), var(--warn), var(--danger)
+- Font: monospace. Keep it dense and information-rich.
+- Output ONLY the raw function body — no function declaration, no markdown fences.`;
+  try{
+    const resp=await callClaude([{role:'user',content:prompt}],
+      {system:'Output only the JavaScript function body. No markdown. No preamble.',max_tokens:2048});
+    let fn=(resp.content[0]?.text||'').trim()
+      .replace(/^```[a-z]*\n?/,'').replace(/\n?```$/,'');
+    const viewId=uid();
+    S.views.push({id:viewId,name:description.slice(0,50),fn});
+    S.mainContent={type:'view',viewId};
+    S.loading=false; persist(); renderPanels();
+    document.getElementById('main').innerHTML=renderMain();
+    syncCmdBar();
+  }catch(e){
+    S.loading=false;
+    S.mainContent={type:'error',text:'View generation failed: '+e.message};
+    document.getElementById('main').innerHTML=renderMain();
+    syncCmdBar();
+  }
+}
+
 async function handleCmd(text){
   if(!text&&!S.attachment) return;
+  // make_view shorthand
+  const mv=(text||'').match(/^(?:make[_\s]view|\/view)[\s:]+(.+)/i);
+  if(mv){await makeView(mv[1].trim());return;}
   S.loading=true; S.curCmd=text||`[file: ${S.attachment?.name}]`; syncCmdBar();
   const msgs=buildMsgs(text);
   let resp;
@@ -921,7 +1080,7 @@ async function confAction(actionId){
   try{a.result=await execAction(a);a.state='done';}
   catch(e){a.result={error:e.message};a.state='done';}
   persist();
-  document.getElementById('tree').innerHTML=renderTree();
+  renderPanels();
   document.getElementById('main').innerHTML=renderMain();
   await finishQueue();
 }
