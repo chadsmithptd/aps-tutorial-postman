@@ -177,6 +177,18 @@ body{font-family:'Menlo','Consolas','Courier New',monospace;font-size:13px;line-
 .swarn{font-size:11px;color:var(--warn);margin-top:6px}
 
 .bwarn{color:var(--warn)}.bdanger{color:var(--danger)}
+
+/* File attach */
+#attach-btn{background:none;border:1px solid var(--border);color:var(--muted);
+  font-family:inherit;font-size:11px;padding:2px 8px;cursor:pointer;margin-right:8px;flex-shrink:0}
+#attach-btn:hover{border-color:var(--accent);color:var(--accent)}
+#attach-chip{display:none;align-items:center;gap:6px;background:var(--accent-light);
+  border:1px solid var(--accent);padding:2px 8px;font-size:11px;color:var(--accent);
+  margin-right:8px;flex-shrink:0;max-width:200px}
+#attach-chip .chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#attach-chip .chip-x{cursor:pointer;color:var(--accent);font-size:13px;line-height:1;flex-shrink:0}
+#attach-chip .chip-x:hover{color:var(--danger)}
+#main.drag-over{outline:2px dashed var(--accent);outline-offset:-4px;background:var(--accent-light)}
 </style>
 </head>
 <body>
@@ -220,7 +232,7 @@ const S = {
   screen:'onboard_key',
   apiKey:'', ontology:null, records:{}, treeExp:{}, selItem:null, mainContent:null,
   history:[], loading:false, pendingActions:[], pendingMsgs:null, pendingAsstContent:null,
-  obErr:'', curCmd:''
+  obErr:'', curCmd:'', attachment:null
 };
 
 /* ── STORAGE ───────────────────────────────────────────── */
@@ -256,7 +268,13 @@ function buildSkeleton(){
     </div>
     <div id="cmd-bar" style="display:none">
       <span class="cpfx">&gt;</span>
+      <div id="attach-chip">
+        <span class="chip-name" id="chip-name"></span>
+        <span class="chip-x" onclick="clearAttach()">×</span>
+      </div>
       <input id="cmd" type="text" autocomplete="off" spellcheck="false" placeholder="type a command...">
+      <button id="attach-btn" onclick="triggerAttach()" title="Attach file">attach</button>
+      <input id="file-inp" type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.csv,.txt,.json" style="display:none" onchange="onFileSelected(this)">
       <span id="cstatus"></span>
     </div>`;
 }
@@ -396,9 +414,17 @@ function renderClarif(){
 function syncCmdBar(){
   const inp=document.getElementById('cmd');
   const st=document.getElementById('cstatus');
+  const chip=document.getElementById('attach-chip');
+  const chipName=document.getElementById('chip-name');
   if(!inp) return;
   inp.disabled=S.loading;
   st.textContent=S.loading?'...':'';
+  if(S.attachment){
+    chip.style.display='flex'; chipName.textContent=S.attachment.name;
+    inp.placeholder=S.attachment.prompt||'describe what to do with this file, or press Enter to auto-extract';
+  } else {
+    chip.style.display='none'; inp.placeholder='type a command...';
+  }
   if(!S.loading&&document.activeElement!==inp) inp.focus();
 }
 
@@ -762,18 +788,57 @@ PRIORITIES:
 ${(o.tracking_priorities||[]).map(p=>`- ${p}`).join('\n')}`;
 }
 
+/* ── FILE ATTACH ───────────────────────────────────────── */
+function triggerAttach(){ document.getElementById('file-inp').click(); }
+
+function onFileSelected(inp){ if(inp.files[0]) stageFile(inp.files[0]); inp.value=''; }
+
+function clearAttach(){ S.attachment=null; syncCmdBar(); }
+
+function stageFile(file){
+  const name=file.name;
+  const ext=name.split('.').pop().toLowerCase();
+  const imgTypes={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp'};
+  if(ext==='pdf'||imgTypes[ext]){
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const b64=ev.target.result.split(',')[1];
+      S.attachment={name, kind: ext==='pdf'?'document':'image',
+        mediaType: ext==='pdf'?'application/pdf':imgTypes[ext], data:b64};
+      syncCmdBar();
+    };
+    reader.readAsDataURL(file);
+  } else {
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      S.attachment={name, kind:'text', data:ev.target.result};
+      syncCmdBar();
+    };
+    reader.readAsText(file);
+  }
+}
+
 /* ── COMMAND ───────────────────────────────────────────── */
 function setupCmd(){
   document.getElementById('cmd').addEventListener('keydown',e=>{
     if(e.key==='Enter'&&!S.loading){
-      const v=e.target.value.trim(); if(!v) return;
+      const v=e.target.value.trim();
+      if(!v&&!S.attachment) return;
       e.target.value=''; handleCmd(v);
     }
+  });
+  const main=document.getElementById('main');
+  main.addEventListener('dragover',e=>{e.preventDefault();main.classList.add('drag-over');});
+  main.addEventListener('dragleave',()=>main.classList.remove('drag-over'));
+  main.addEventListener('drop',e=>{
+    e.preventDefault(); main.classList.remove('drag-over');
+    const f=e.dataTransfer.files[0]; if(f) stageFile(f);
   });
 }
 
 async function handleCmd(text){
-  S.loading=true; S.curCmd=text; syncCmdBar();
+  if(!text&&!S.attachment) return;
+  S.loading=true; S.curCmd=text||`[file: ${S.attachment?.name}]`; syncCmdBar();
   const msgs=buildMsgs(text);
   let resp;
   try{resp=await callClaude(msgs,{system:buildSysPrompt(),tools:TOOLS,tool_choice:{type:'auto'},max_tokens:2048});}
@@ -805,7 +870,24 @@ function buildMsgs(userText){
   let recent=S.history.slice(-4);
   while(recent.length&&recent[0].role!=='user') recent=recent.slice(1);
   const msgs=recent.map(h=>({role:h.role,content:h.text}));
-  msgs.push({role:'user',content:userText});
+
+  if(S.attachment){
+    const att=S.attachment;
+    const prompt=userText||'Review this document and extract all relevant business data. Create records for any entities you identify (orders, customers, line items, vendors, etc.) that match our ontology.';
+    const content=[];
+    if(att.kind==='document'){
+      content.push({type:'document',source:{type:'base64',media_type:att.mediaType,data:att.data}});
+    } else if(att.kind==='image'){
+      content.push({type:'image',source:{type:'base64',media_type:att.mediaType,data:att.data}});
+    } else {
+      content.push({type:'text',text:`File: ${att.name}\n\n${att.data}`});
+    }
+    content.push({type:'text',text:prompt});
+    msgs.push({role:'user',content});
+    S.attachment=null; syncCmdBar();
+  } else {
+    msgs.push({role:'user',content:userText});
+  }
   return msgs;
 }
 
