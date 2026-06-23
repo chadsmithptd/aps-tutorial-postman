@@ -358,15 +358,13 @@
           <th>Op #</th>
           <th>Operation</th>
           <th>Resource</th>
-          <th style="text-align:center;">1st Art.</th>
-          <th style="text-align:center;">Qty Complete</th>
           <th style="text-align:center;">Complete</th>
           <th>Notes / Due</th>
         </tr>
       </thead>
       <tbody id="ops-tbody">
         <tr>
-          <td colspan="7" style="text-align:center; color:#888; padding:20px; font-style:italic;">
+          <td colspan="5" style="text-align:center; color:#888; padding:20px; font-style:italic;">
             Upload a ProShop screenshot to populate operations
           </td>
         </tr>
@@ -558,15 +556,11 @@ Rules:
   function buildOpsTable(ops) {
     const tbody = document.getElementById('ops-tbody');
     if (!ops.length) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px;font-style:italic;">No operations found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;font-style:italic;">No operations found</td></tr>';
       return;
     }
 
     tbody.innerHTML = ops.map(op => {
-      const firstArt = op.firstArticle === true  ? '<span class="complete-check">&#10004;</span>'
-                     : op.firstArticle === false ? '&#9744;' : '—';
-      const complete = op.complete === true  ? '<span class="complete-check">&#10004;</span>'
-                     : op.complete === false ? '&#9744;' : '—';
       const notesCell = op.dueDate
         ? `<span class="due-cell">Due ${op.dueDate}</span>${op.notes ? ' ' + op.notes : ''}`
         : (op.notes || '');
@@ -575,9 +569,7 @@ Rules:
         <td><span class="op-num">${esc(op.opNumber)}</span></td>
         <td>${esc(op.description)}</td>
         <td><span class="resource">${esc(op.resource)}</span></td>
-        <td style="text-align:center;">${firstArt}</td>
-        <td style="text-align:center;">${esc(op.qtyComplete) || '—'}</td>
-        <td style="text-align:center;">${complete}</td>
+        <td style="text-align:center;">&#9744;</td>
         <td>${notesCell}</td>
       </tr>`;
     }).join('');
