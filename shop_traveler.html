@@ -25,6 +25,7 @@
     border-radius: 6px;
     border: 1px solid #ccc;
     box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    flex-wrap: wrap;
   }
 
   .toolbar h2 {
@@ -32,6 +33,28 @@
     font-weight: bold;
     color: #222;
     margin-right: auto;
+  }
+
+  .api-key-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .api-key-wrap label {
+    font-size: 11px;
+    font-weight: bold;
+    color: #555;
+    white-space: nowrap;
+  }
+
+  .api-key-wrap input {
+    font-size: 11px;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 240px;
+    font-family: monospace;
   }
 
   .btn {
@@ -52,6 +75,7 @@
     color: #fff;
   }
   .btn-upload:hover { background: #154d8a; }
+  .btn-upload:disabled { background: #7a9ec8; cursor: not-allowed; }
 
   .btn-print {
     background: #2d7a2d;
@@ -66,6 +90,9 @@
     color: #888;
     font-style: italic;
   }
+  .upload-status.loading { color: #1a5fa8; font-style: normal; font-weight: bold; }
+  .upload-status.error   { color: #c00;    font-style: normal; font-weight: bold; }
+  .upload-status.success { color: #2d7a2d; font-style: normal; font-weight: bold; }
 
   /* ── Preview panel ── */
   #preview-panel {
@@ -123,9 +150,9 @@
     margin-bottom: 4px;
   }
 
-  .value { font-size: 14px; font-weight: bold; color: #000; }
+  .value       { font-size: 14px; font-weight: bold; color: #000; }
   .value-large { font-size: 22px; font-weight: bold; }
-  .value-xl { font-size: 28px; font-weight: bold; }
+  .value-xl    { font-size: 28px; font-weight: bold; }
 
   .status-badge {
     display: inline-block;
@@ -171,10 +198,7 @@
   }
   .material-cell:last-child { border-right: none; }
 
-  .ops-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
+  .ops-table { width: 100%; border-collapse: collapse; }
 
   .ops-table thead tr { background: #222; color: #fff; }
 
@@ -196,11 +220,11 @@
     font-size: 11px;
     vertical-align: middle;
   }
-  .ops-table td:last-child { border-right: none; }
+  .ops-table td:last-child  { border-right: none; }
   .ops-table tr:last-child td { border-bottom: none; }
   .ops-table tr:nth-child(even) { background: #f9f9f9; }
 
-  .op-num { font-weight: bold; color: #1a5fa8; font-size: 12px; }
+  .op-num        { font-weight: bold; color: #1a5fa8; font-size: 12px; }
   .complete-check { color: #2d7a2d; font-size: 14px; font-weight: bold; }
 
   .due-cell {
@@ -249,9 +273,13 @@
 <!-- Toolbar -->
 <div class="toolbar">
   <h2>Shop Floor Traveler</h2>
+  <div class="api-key-wrap">
+    <label for="api-key-input">API Key:</label>
+    <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off">
+  </div>
   <span class="upload-status" id="upload-status">No screenshot loaded</span>
   <input type="file" id="file-input" accept="image/*">
-  <button class="btn btn-upload" onclick="document.getElementById('file-input').click()">
+  <button class="btn btn-upload" id="upload-btn" onclick="document.getElementById('file-input').click()">
     &#8593; Upload Screenshot
   </button>
   <button class="btn btn-print" onclick="window.print()">
@@ -271,43 +299,43 @@
   <div class="header">
     <div class="header-cell">
       <div class="label">Work Order #</div>
-      <div class="value-xl">26-0042</div>
+      <div class="value-xl" id="wo-number">—</div>
     </div>
     <div class="header-cell">
       <div class="label">Status</div>
-      <div style="margin-top:6px;"><span class="status-badge">Manufacturing Complete</span></div>
+      <div style="margin-top:6px;"><span class="status-badge" id="wo-status">—</span></div>
     </div>
     <div class="header-cell">
       <div class="label">WO Must Leave By</div>
-      <div class="due-alert">2/12/2026</div>
+      <div class="due-alert" id="wo-must-leave">—</div>
     </div>
     <div class="header-cell">
       <div class="label">Customer Due</div>
-      <div class="value">02/16/2026</div>
+      <div class="value" id="customer-due">—</div>
     </div>
   </div>
 
   <div class="part-bar">
     <div class="header-cell">
       <div class="label">Part Name</div>
-      <div class="value-large">NEST ACTUATION PLATE</div>
+      <div class="value-large" id="part-name">—</div>
     </div>
     <div class="header-cell">
       <div class="label">Part Number</div>
-      <div class="value">455-05293-0</div>
+      <div class="value" id="part-number">—</div>
     </div>
     <div class="header-cell">
       <div class="label">Rev</div>
-      <div class="value-large" style="text-align:center;">01</div>
+      <div class="value-large" style="text-align:center;" id="part-rev">—</div>
     </div>
     <div class="header-cell" style="display:grid;grid-template-columns:1fr 1fr;">
       <div>
         <div class="label">Qty Ordered</div>
-        <div class="value-large" style="text-align:center;">40</div>
+        <div class="value-large" style="text-align:center;" id="qty-ordered">—</div>
       </div>
       <div>
         <div class="label">Raw Stock Qty</div>
-        <div class="value-large" style="text-align:center;">40</div>
+        <div class="value-large" style="text-align:center;" id="raw-stock-qty">—</div>
       </div>
     </div>
   </div>
@@ -315,15 +343,11 @@
   <div class="material-row">
     <div class="material-cell">
       <div class="label">Material / Part Stock</div>
-      <div class="value" style="font-size:12px; margin-top:4px;">
-        Aluminum 6061-T6 AMS-4027, ASTM-B209<br>Plate .5 x 11.5 x 16.3
-      </div>
+      <div class="value" style="font-size:12px; margin-top:4px;" id="material">—</div>
     </div>
     <div class="material-cell">
       <div class="label">Outside Processing</div>
-      <div class="value" style="font-size:12px; margin-top:4px;">
-        Anodize (Cosmetic) — Upstate Anodize LLC<br>MIL-8625 T2 CL2 Navy Blue
-      </div>
+      <div class="value" style="font-size:12px; margin-top:4px;" id="outside-processing">—</div>
     </div>
   </div>
 
@@ -340,105 +364,11 @@
           <th>Notes / Due</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="ops-tbody">
         <tr>
-          <td><span class="op-num">15</span></td>
-          <td>Part Programming / Modeling</td>
-          <td><span class="resource">PROG_MODEL1</span></td>
-          <td style="text-align:center;">—</td>
-          <td style="text-align:center;">—</td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">50</span></td>
-          <td>Milling</td>
-          <td><span class="resource">HAAS-VF3-01</span></td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td style="text-align:center;">50</td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">60</span></td>
-          <td>Milling</td>
-          <td><span class="resource">HAAS-VF3-01</span></td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td style="text-align:center;">50</td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">1000</span></td>
-          <td>Deburr</td>
-          <td><span class="resource">FIN_HAND-01</span></td>
-          <td style="text-align:center;">—</td>
-          <td style="text-align:center;">50</td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">1050</span></td>
-          <td>Outgoing Inspection</td>
-          <td><span class="resource">INSPECT-01</span></td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td style="text-align:center;">50</td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">1060</span></td>
-          <td>Shipping (OP)</td>
-          <td><span class="resource">SHIP-01</span></td>
-          <td style="text-align:center;">—</td>
-          <td style="text-align:center;">50</td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">1070</span></td>
-          <td>Outside Processing</td>
-          <td><span class="resource">EXTERNAL-01</span></td>
-          <td style="text-align:center;">—</td>
-          <td style="text-align:center;">50</td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">1080</span></td>
-          <td>Incoming Inspection</td>
-          <td><span class="resource">INSPECT-01</span></td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td style="text-align:center;">50</td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">2000</span></td>
-          <td>Final Inspection</td>
-          <td><span class="resource">INSPECT-01</span></td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td style="text-align:center;">50</td>
-          <td style="text-align:center;"><span class="complete-check">✔</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">2010</span></td>
-          <td>Shipping</td>
-          <td><span class="resource">SHIP-01</span></td>
-          <td style="text-align:center;">—</td>
-          <td style="text-align:center;">—</td>
-          <td style="text-align:center;">—</td>
-          <td><span class="due-cell">Due 2/13/2026</span></td>
-        </tr>
-        <tr>
-          <td><span class="op-num">3000</span></td>
-          <td>Invoicing</td>
-          <td><span class="resource">ACCOUNT-01</span></td>
-          <td style="text-align:center;">—</td>
-          <td style="text-align:center;">—</td>
-          <td style="text-align:center;">—</td>
-          <td></td>
+          <td colspan="7" style="text-align:center; color:#888; padding:20px; font-style:italic;">
+            Upload a ProShop screenshot to populate operations
+          </td>
         </tr>
       </tbody>
     </table>
@@ -446,42 +376,221 @@
 
   <div class="notes-section">
     <div class="label">Job Notes</div>
-    <div style="margin-top:6px; min-height:40px; font-size:12px;"></div>
+    <div style="margin-top:6px; min-height:40px; font-size:12px;" id="job-notes"></div>
   </div>
 
   <div class="footer">
     <div class="footer-cell">
       <div class="label">Approved Print</div>
-      <div class="value" style="font-size:11px; margin-top:3px;">455-05293-0_Rev_01.pdf</div>
+      <div class="value" style="font-size:11px; margin-top:3px;" id="approved-print">—</div>
     </div>
     <div class="footer-cell">
       <div class="label">Record Created / Modified</div>
-      <div style="font-size:10px; color:#555; margin-top:3px;">
-        Created: 2/2/2026 by Chad Smith &nbsp;|&nbsp; Modified: 3/26/2026 by Chad Smith
-      </div>
+      <div style="font-size:10px; color:#555; margin-top:3px;" id="record-info">—</div>
     </div>
   </div>
 
 </div>
 
 <script>
-  const fileInput = document.getElementById('file-input');
+  const fileInput   = document.getElementById('file-input');
   const previewPanel = document.getElementById('preview-panel');
-  const previewImg = document.getElementById('preview-img');
+  const previewImg  = document.getElementById('preview-img');
   const uploadStatus = document.getElementById('upload-status');
+  const uploadBtn   = document.getElementById('upload-btn');
+  const apiKeyInput = document.getElementById('api-key-input');
 
-  fileInput.addEventListener('change', function () {
+  // Persist API key across page loads
+  apiKeyInput.value = localStorage.getItem('anthropic_api_key') || '';
+  apiKeyInput.addEventListener('change', () => {
+    localStorage.setItem('anthropic_api_key', apiKeyInput.value.trim());
+  });
+
+  function setStatus(msg, type) {
+    uploadStatus.textContent = msg;
+    uploadStatus.className = 'upload-status' + (type ? ' ' + type : '');
+  }
+
+  fileInput.addEventListener('change', async function () {
     const file = this.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      previewImg.src = e.target.result;
-      previewPanel.style.display = 'block';
-      uploadStatus.textContent = file.name;
-    };
-    reader.readAsDataURL(file);
+    const apiKey = apiKeyInput.value.trim() || localStorage.getItem('anthropic_api_key') || '';
+    if (!apiKey) {
+      setStatus('Enter your Anthropic API key first.', 'error');
+      return;
+    }
+
+    const dataUrl = await readFileAsDataURL(file);
+    previewImg.src = dataUrl;
+    previewPanel.style.display = 'block';
+
+    const [meta, base64] = dataUrl.split(',');
+    const mediaType = meta.match(/:(.*?);/)[1];
+
+    setStatus('Extracting data from screenshot…', 'loading');
+    uploadBtn.disabled = true;
+
+    try {
+      const data = await extractFromImage(apiKey, base64, mediaType);
+      populateTraveler(data);
+      setStatus('Traveler populated from ' + file.name, 'success');
+    } catch (err) {
+      setStatus('Error: ' + err.message, 'error');
+      console.error(err);
+    } finally {
+      uploadBtn.disabled = false;
+    }
   });
+
+  function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function extractFromImage(apiKey, base64, mediaType) {
+    const prompt = `You are analyzing a ProShop ERP work order screenshot. Extract all visible data and return ONLY a valid JSON object with this exact schema — no markdown, no explanation, just raw JSON:
+
+{
+  "workOrderNumber": "",
+  "status": "",
+  "mustLeaveBy": "",
+  "customerDue": "",
+  "partName": "",
+  "partNumber": "",
+  "revision": "",
+  "qtyOrdered": "",
+  "rawStockQty": "",
+  "material": "",
+  "outsideProcessing": "",
+  "approvedPrint": "",
+  "createdBy": "",
+  "createdDate": "",
+  "modifiedBy": "",
+  "modifiedDate": "",
+  "jobNotes": "",
+  "operations": [
+    {
+      "opNumber": "",
+      "description": "",
+      "resource": "",
+      "firstArticle": null,
+      "qtyComplete": "",
+      "complete": null,
+      "dueDate": "",
+      "notes": ""
+    }
+  ]
+}
+
+Rules:
+- firstArticle and complete: true if checked/complete, false if explicitly incomplete, null if not applicable or not shown
+- Use empty string "" for any field not visible in the screenshot
+- operations array should contain one entry per operation row visible
+- Return raw JSON only, no code fences`;
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-8',
+        max_tokens: 2048,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error((err.error && err.error.message) || 'API error ' + resp.status);
+    }
+
+    const result = await resp.json();
+    const text = result.content[0].text.trim();
+    const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    return JSON.parse(clean);
+  }
+
+  function populateTraveler(d) {
+    set('wo-number',         d.workOrderNumber);
+    set('wo-status',         d.status);
+    set('wo-must-leave',     d.mustLeaveBy);
+    set('customer-due',      d.customerDue);
+    set('part-name',         d.partName);
+    set('part-number',       d.partNumber);
+    set('part-rev',          d.revision);
+    set('qty-ordered',       d.qtyOrdered);
+    set('raw-stock-qty',     d.rawStockQty);
+    set('material',          d.material);
+    set('outside-processing', d.outsideProcessing);
+    set('job-notes',         d.jobNotes);
+    set('approved-print',    d.approvedPrint);
+
+    const created  = [d.createdDate,  d.createdBy ].filter(Boolean).join(' by ');
+    const modified = [d.modifiedDate, d.modifiedBy].filter(Boolean).join(' by ');
+    const parts = [];
+    if (created)  parts.push('Created: '  + created);
+    if (modified) parts.push('Modified: ' + modified);
+    set('record-info', parts.join('  |  ') || '—');
+
+    buildOpsTable(d.operations || []);
+  }
+
+  function set(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val || '—';
+  }
+
+  function buildOpsTable(ops) {
+    const tbody = document.getElementById('ops-tbody');
+    if (!ops.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px;font-style:italic;">No operations found</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = ops.map(op => {
+      const firstArt = op.firstArticle === true  ? '<span class="complete-check">&#10004;</span>'
+                     : op.firstArticle === false ? '&#9744;' : '—';
+      const complete = op.complete === true  ? '<span class="complete-check">&#10004;</span>'
+                     : op.complete === false ? '&#9744;' : '—';
+      const notesCell = op.dueDate
+        ? `<span class="due-cell">Due ${op.dueDate}</span>${op.notes ? ' ' + op.notes : ''}`
+        : (op.notes || '');
+
+      return `<tr>
+        <td><span class="op-num">${esc(op.opNumber)}</span></td>
+        <td>${esc(op.description)}</td>
+        <td><span class="resource">${esc(op.resource)}</span></td>
+        <td style="text-align:center;">${firstArt}</td>
+        <td style="text-align:center;">${esc(op.qtyComplete) || '—'}</td>
+        <td style="text-align:center;">${complete}</td>
+        <td>${notesCell}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 </script>
 
 </body>
