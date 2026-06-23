@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Shop Traveler</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    background: #fff;
+    color: #000;
+    padding: 16px;
+  }
+
+  .traveler {
+    width: 8.5in;
+    border: 2px solid #000;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    border-bottom: 2px solid #000;
+  }
+
+  .header-cell {
+    padding: 8px 10px;
+    border-right: 1px solid #000;
+  }
+  .header-cell:last-child { border-right: none; }
+
+  .label {
+    font-size: 9px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #555;
+    margin-bottom: 4px;
+  }
+
+  .value {
+    font-size: 14px;
+    font-weight: bold;
+    color: #000;
+  }
+
+  .value-large {
+    font-size: 22px;
+    font-weight: bold;
+  }
+
+  .value-xl {
+    font-size: 28px;
+    font-weight: bold;
+  }
+
+  .status-badge {
+    display: inline-block;
+    background: #2d7a2d;
+    color: #fff;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  .due-alert {
+    color: #c00;
+    border: 1px solid #c00;
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+    font-size: 13px;
+  }
+
+  /* ── Part Info Bar ── */
+  .part-bar {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    border-bottom: 2px solid #000;
+    background: #f4f4f4;
+  }
+
+  .part-bar .header-cell {
+    border-right: 1px solid #000;
+  }
+
+  /* ── Material / Outside Processing ── */
+  .material-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 2px solid #000;
+  }
+
+  .material-cell {
+    padding: 8px 10px;
+    border-right: 1px solid #000;
+  }
+  .material-cell:last-child { border-right: none; }
+
+  /* ── Operations Table ── */
+  .ops-section { padding: 0; }
+
+  .ops-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .ops-table thead tr {
+    background: #222;
+    color: #fff;
+  }
+
+  .ops-table th {
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: bold;
+    border-right: 1px solid #555;
+  }
+  .ops-table th:last-child { border-right: none; }
+
+  .ops-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid #ccc;
+    border-right: 1px solid #ccc;
+    font-size: 11px;
+    vertical-align: middle;
+  }
+  .ops-table td:last-child { border-right: none; }
+
+  .ops-table tr:last-child td { border-bottom: none; }
+
+  .ops-table tr:nth-child(even) { background: #f9f9f9; }
+
+  .op-num {
+    font-weight: bold;
+    color: #1a5fa8;
+    font-size: 12px;
+  }
+
+  .complete-check {
+    color: #2d7a2d;
+    font-size: 14px;
+    font-weight: bold;
+  }
+
+  .due-cell {
+    color: #c00;
+    font-weight: bold;
+    font-size: 11px;
+    border: 1px solid #c00;
+    padding: 2px 5px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+
+  .resource {
+    color: #1a5fa8;
+    font-size: 10px;
+    font-weight: bold;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 2px solid #000;
+    background: #f4f4f4;
+  }
+
+  .footer-cell {
+    padding: 8px 10px;
+    border-right: 1px solid #000;
+  }
+  .footer-cell:last-child { border-right: none; }
+
+  .notes-section {
+    border-top: 2px solid #000;
+    padding: 10px;
+    min-height: 60px;
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { padding: 0; }
+    .traveler { width: 100%; border: 2px solid #000; }
+    .status-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .ops-table thead tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="traveler">
+
+  <!-- Row 1: WO# / Status / Dates -->
+  <div class="header">
+    <div class="header-cell">
+      <div class="label">Work Order #</div>
+      <div class="value-xl">26-0042</div>
+    </div>
+    <div class="header-cell">
+      <div class="label">Status</div>
+      <div style="margin-top:6px;"><span class="status-badge">Manufacturing Complete</span></div>
+    </div>
+    <div class="header-cell">
+      <div class="label">WO Must Leave By</div>
+      <div class="due-alert">2/12/2026</div>
+    </div>
+    <div class="header-cell">
+      <div class="label">Customer Due</div>
+      <div class="value">02/16/2026</div>
+    </div>
+  </div>
+
+  <!-- Row 2: Part Info -->
+  <div class="part-bar">
+    <div class="header-cell">
+      <div class="label">Part Name</div>
+      <div class="value-large">NEST ACTUATION PLATE</div>
+    </div>
+    <div class="header-cell">
+      <div class="label">Part Number</div>
+      <div class="value">455-05293-0</div>
+    </div>
+    <div class="header-cell">
+      <div class="label">Rev</div>
+      <div class="value-large" style="text-align:center;">01</div>
+    </div>
+    <div class="header-cell" style="display:grid;grid-template-columns:1fr 1fr;">
+      <div>
+        <div class="label">Qty Ordered</div>
+        <div class="value-large" style="text-align:center;">40</div>
+      </div>
+      <div>
+        <div class="label">Raw Stock Qty</div>
+        <div class="value-large" style="text-align:center;">40</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Material / Outside Processing -->
+  <div class="material-row">
+    <div class="material-cell">
+      <div class="label">Material / Part Stock</div>
+      <div class="value" style="font-size:12px; margin-top:4px;">
+        Aluminum 6061-T6 AMS-4027, ASTM-B209<br>Plate .5 x 11.5 x 16.3
+      </div>
+    </div>
+    <div class="material-cell">
+      <div class="label">Outside Processing</div>
+      <div class="value" style="font-size:12px; margin-top:4px;">
+        Anodize (Cosmetic) — Upstate Anodize LLC<br>MIL-8625 T2 CL2 Navy Blue
+      </div>
+    </div>
+  </div>
+
+  <!-- Operations Table -->
+  <div class="ops-section">
+    <table class="ops-table">
+      <thead>
+        <tr>
+          <th>Op #</th>
+          <th>Operation</th>
+          <th>Resource</th>
+          <th style="text-align:center;">1st Art.</th>
+          <th style="text-align:center;">Qty Complete</th>
+          <th style="text-align:center;">Complete</th>
+          <th>Notes / Due</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="op-num">15</span></td>
+          <td>Part Programming / Modeling</td>
+          <td><span class="resource">PROG_MODEL1</span></td>
+          <td style="text-align:center;">—</td>
+          <td style="text-align:center;">—</td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">50</span></td>
+          <td>Milling</td>
+          <td><span class="resource">HAAS-VF3-01</span></td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td style="text-align:center;">50</td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">60</span></td>
+          <td>Milling</td>
+          <td><span class="resource">HAAS-VF3-01</span></td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td style="text-align:center;">50</td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">1000</span></td>
+          <td>Deburr</td>
+          <td><span class="resource">FIN_HAND-01</span></td>
+          <td style="text-align:center;">—</td>
+          <td style="text-align:center;">50</td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">1050</span></td>
+          <td>Outgoing Inspection</td>
+          <td><span class="resource">INSPECT-01</span></td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td style="text-align:center;">50</td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">1060</span></td>
+          <td>Shipping (OP)</td>
+          <td><span class="resource">SHIP-01</span></td>
+          <td style="text-align:center;">—</td>
+          <td style="text-align:center;">50</td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">1070</span></td>
+          <td>Outside Processing</td>
+          <td><span class="resource">EXTERNAL-01</span></td>
+          <td style="text-align:center;">—</td>
+          <td style="text-align:center;">50</td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">1080</span></td>
+          <td>Incoming Inspection</td>
+          <td><span class="resource">INSPECT-01</span></td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td style="text-align:center;">50</td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">2000</span></td>
+          <td>Final Inspection</td>
+          <td><span class="resource">INSPECT-01</span></td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td style="text-align:center;">50</td>
+          <td style="text-align:center;"><span class="complete-check">✔</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">2010</span></td>
+          <td>Shipping</td>
+          <td><span class="resource">SHIP-01</span></td>
+          <td style="text-align:center;">—</td>
+          <td style="text-align:center;">—</td>
+          <td style="text-align:center;">—</td>
+          <td><span class="due-cell">Due 2/13/2026</span></td>
+        </tr>
+        <tr>
+          <td><span class="op-num">3000</span></td>
+          <td>Invoicing</td>
+          <td><span class="resource">ACCOUNT-01</span></td>
+          <td style="text-align:center;">—</td>
+          <td style="text-align:center;">—</td>
+          <td style="text-align:center;">—</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Notes -->
+  <div class="notes-section">
+    <div class="label">Job Notes</div>
+    <div style="margin-top:6px; min-height:40px; font-size:12px;"></div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-cell">
+      <div class="label">Approved Print</div>
+      <div class="value" style="font-size:11px; margin-top:3px;">455-05293-0_Rev_01.pdf</div>
+    </div>
+    <div class="footer-cell">
+      <div class="label">Record Created / Modified</div>
+      <div style="font-size:10px; color:#555; margin-top:3px;">
+        Created: 2/2/2026 by Chad Smith &nbsp;|&nbsp; Modified: 3/26/2026 by Chad Smith
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
