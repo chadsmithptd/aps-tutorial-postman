@@ -432,7 +432,9 @@
     try {
       const data = await extractFromImage(apiKey, base64, mediaType);
       populateTraveler(data);
-      setStatus('Traveler populated from ' + file.name, 'success');
+      const cost = calcCost(data._usage);
+      const costNote = cost !== null ? `  (${cost})` : '';
+      setStatus('Traveler populated from ' + file.name + costNote, 'success');
     } catch (err) {
       setStatus('Error: ' + err.message, 'error');
       console.error(err);
@@ -520,7 +522,17 @@ Rules:
     const result = await resp.json();
     const text = result.content[0].text.trim();
     const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-    return JSON.parse(clean);
+    const data = JSON.parse(clean);
+    data._usage = result.usage;
+    return data;
+  }
+
+  function calcCost(usage) {
+    if (!usage) return null;
+    const input  = (usage.input_tokens  || 0) / 1_000_000 * 5.00;
+    const output = (usage.output_tokens || 0) / 1_000_000 * 25.00;
+    const total  = input + output;
+    return total < 0.01 ? '<$0.01' : '$' + total.toFixed(4);
   }
 
   function populateTraveler(d) {
