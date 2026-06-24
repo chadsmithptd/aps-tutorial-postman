@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blueprint → 3D</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0d1a;
+      --surface:  #16213e;
+      --border:   #0f3460;
+      --accent:   #4fc3f7;
+      --accent2:  #81d4fa;
+      --text:     #e0e0e0;
+      --muted:    #888;
+      --error:    #f44336;
+      --success:  #4caf50;
+      --hole-color: #ff6b6b;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
+    header span { font-size: 12px; color: var(--muted); }
+
+    /* ── Layout ── */
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 300px;
+      min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    input[type="password"],
+    input[type="number"],
+    input[type="text"],
+    textarea {
+      width: 100%;
+      background: #0a1628;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    input[type="number"] { width: 76px; text-align: right; }
+
+    /* ── Upload ── */
+    .upload-area {
+      border: 2px dashed var(--border);
+      border-radius: 6px;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      overflow: hidden;
+      padding: 10px;
+    }
+    .upload-area:hover, .upload-area.drag-over {
+      border-color: var(--accent);
+      background: rgba(79,195,247,0.04);
+    }
+    .upload-area img { max-width: 100%; max-height: 130px; border-radius: 4px; object-fit: contain; }
+    .upload-icon { font-size: 22px; }
+    .upload-hint { font-size: 11px; color: var(--muted); text-align: center; }
+
+    /* ── Buttons ── */
+    .btn {
+      width: 100%;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #071020; }
+    .btn-primary:hover { background: var(--accent2); }
+    .btn-primary:disabled { background: #2a3a4a; color: var(--muted); cursor: not-allowed; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--accent);
+      margin-top: 8px;
+    }
+    .btn-ghost:hover { background: var(--border); }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .tab {
+      padding: 9px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.15s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .tab-pane { display: none; padding: 14px 16px; overflow-y: auto; flex: 1; }
+    .tab-pane.active { display: flex; flex-direction: column; }
+
+    /* ── Params panel ── */
+    .params-scroll { overflow-y: auto; flex: 1; }
+
+    .part-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+    .part-units { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+
+    .op-label {
+      display: inline-block;
+      background: #0f3460;
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 3px;
+      margin: 10px 0 8px;
+    }
+
+    .param-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .param-label { font-size: 12px; color: var(--muted); flex: 1; min-width: 0; }
+    .param-unit { font-size: 11px; color: #555; width: 22px; }
+
+    /* ── JSON editor ── */
+    textarea.json-editor {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      height: 260px;
+      resize: vertical;
+      color: #a8ff78;
+      flex-shrink: 0;
+    }
+
+    /* ── Feedback messages ── */
+    .msg { font-size: 11px; margin-top: 6px; min-height: 16px; }
+    .msg.error { color: var(--error); }
+    .msg.success { color: var(--success); }
+
+    .empty-hint { font-size: 12px; color: var(--muted); }
+
+    /* ── Viewport ── */
+    #viewport {
+      flex: 1;
+      position: relative;
+      background: var(--bg);
+      overflow: hidden;
+    }
+    #canvas { width: 100%; height: 100%; display: block; }
+
+    /* ── Loading overlay ── */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--accent);
+      z-index: 10;
+    }
+    .loading-overlay.active { display: flex; }
+    .spinner {
+      width: 22px; height: 22px;
+      border: 3px solid var(--accent);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Status bar ── */
+    .statusbar {
+      background: #0a1628;
+      border-top: 1px solid var(--border);
+      padding: 4px 16px;
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .statusbar .right { margin-left: auto; }
+    .ok   { color: var(--success); }
+    .err  { color: var(--error); }
+    .info { color: var(--accent); }
+
+    /* ── View controls overlay ── */
+    .view-controls {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 5;
+    }
+    .view-btn {
+      background: rgba(22,33,62,0.85);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      transition: background 0.15s;
+    }
+    .view-btn:hover { background: rgba(15,52,96,0.9); }
+
+    /* Wireframe toggle */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .toggle-label { font-size: 12px; color: var(--muted); }
+    input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Blueprint → 3D</h1>
+  <span>Powered by Claude Vision</span>
+</header>
+
+<div class="main">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+
+    <!-- API Key -->
+    <div class="section">
+      <div class="section-title">Anthropic API Key</div>
+      <input type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off" />
+    </div>
+
+    <!-- Upload -->
+    <div class="section">
+      <div class="section-title">Blueprint Image</div>
+      <div class="upload-area" id="upload-area">
+        <div id="upload-placeholder">
+          <div class="upload-icon">📐</div>
+          <div style="font-size:13px;">Drop image or click to upload</div>
+          <div class="upload-hint">Freehand sketch, photo, or scan</div>
+        </div>
+        <img id="preview-img" style="display:none;" alt="blueprint preview" />
+      </div>
+      <input type="file" id="file-input" accept="image/*" style="display:none;" />
+      <button class="btn btn-primary" id="analyze-btn" style="margin-top:10px;" disabled>
+        Analyze Blueprint
+      </button>
+      <div class="msg" id="analyze-msg"></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" data-tab="params">Parameters</div>
+      <div class="tab" data-tab="json">JSON</div>
+    </div>
+
+    <!-- Parameters tab -->
+    <div class="tab-pane active" id="tab-params">
+      <div class="params-scroll">
+        <div class="empty-hint" id="params-empty">
+          Upload and analyze a blueprint to see parameters.
+        </div>
+        <div id="params-panel" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- JSON tab -->
+    <div class="tab-pane" id="tab-json">
+      <textarea class="json-editor" id="json-editor"
+        placeholder='JSON schema will appear here after analysis...'></textarea>
+      <button class="btn btn-ghost" id="apply-json-btn">Apply JSON</button>
+      <div class="msg" id="json-msg"></div>
+    </div>
+
+  </div>
+
+  <!-- ── 3D Viewport ── -->
+  <div id="viewport">
+    <canvas id="canvas"></canvas>
+
+    <!-- View buttons -->
+    <div class="view-controls">
+      <button class="view-btn" id="btn-top">Top</button>
+      <button class="view-btn" id="btn-front">Front</button>
+      <button class="view-btn" id="btn-side">Side</button>
+      <button class="view-btn" id="btn-iso">Iso</button>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-overlay" id="loading">
+      <div class="spinner"></div>
+      <span id="loading-text">Analyzing blueprint...</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="statusbar">
+  <span id="status-msg">Ready — upload a blueprint to get started.</span>
+  <span class="right">Scroll to zoom &nbsp;·&nbsp; Drag to rotate &nbsp;·&nbsp; Right-click to pan</span>
+</div>
+
+<!-- Three.js via importmap -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ════════════════════════════════════════════════
+// Three.js scene setup
+// ════════════════════════════════════════════════
+const canvas   = document.getElementById('canvas');
+const viewport = document.getElementById('viewport');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0d1a);
+scene.fog = new THREE.FogExp2(0x0d0d1a, 0.0008);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 20000);
+camera.position.set(200, 160, 200);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 5;
+controls.maxDistance = 5000;
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+
+const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+sun.position.set(150, 300, 100);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0x4fc3f7, 0.25);
+fill.position.set(-100, -80, -150);
+scene.add(fill);
+
+// Grid & axes
+const grid = new THREE.GridHelper(600, 24, 0x1e5799, 0x0f3460);
+grid.material.opacity = 0.5;
+grid.material.transparent = true;
+scene.add(grid);
+
+const axes = new THREE.AxesHelper(40);
+scene.add(axes);
+
+// Resize
+function resize() {
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resize();
+new ResizeObserver(resize).observe(viewport);
+
+// Render loop
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+
+// ════════════════════════════════════════════════
+// State
+// ════════════════════════════════════════════════
+let currentModel    = null;
+let currentSchema   = null;
+let imageBase64     = null;
+let wireframeOn     = false;
+
+// ════════════════════════════════════════════════
+// Materials
+// ════════════════════════════════════════════════
+function makeMat(opts = {}) {
+  return new THREE.MeshPhongMaterial({
+    color:    0x3d9fd4,
+    specular: 0x112233,
+    shininess: 50,
+    transparent: true,
+    opacity: 0.88,
+    ...opts,
+  });
+}
+
+// ════════════════════════════════════════════════
+// Schema → Three.js geometry
+// ════════════════════════════════════════════════
+function schemaToGroup(schema) {
+  const group = new THREE.Group();
+  const { base, operations = [], units = 'mm' } = schema;
+  const s = units === 'in' ? 25.4 : 1;  // normalise to mm
+
+  // ── Base shape ──────────────────────────────
+  let baseGeo;
+  const p = base.parameters;
+
+  switch (base.type) {
+    case 'box':
+      baseGeo = new THREE.BoxGeometry(
+        (p.width  || 100) * s,
+        (p.height || 50)  * s,
+        (p.depth  || 10)  * s
+      );
+      break;
+    case 'cylinder':
+      baseGeo = new THREE.CylinderGeometry(
+        (p.radius || 30) * s,
+        (p.radius || 30) * s,
+        (p.height || 60) * s,
+        72
+      );
+      break;
+    case 'sphere':
+      baseGeo = new THREE.SphereGeometry((p.radius || 30) * s, 72, 36);
+      break;
+    case 'cone':
+      baseGeo = new THREE.CylinderGeometry(
+        (p.radius2 || 5)  * s,
+        (p.radius1 || 30) * s,
+        (p.height  || 60) * s,
+        72
+      );
+      break;
+    case 'torus':
+      baseGeo = new THREE.TorusGeometry(
+        (p.radius || 40)  * s,
+        (p.tube   || 10)  * s,
+        32, 100
+      );
+      break;
+    default:
+      baseGeo = new THREE.BoxGeometry(100 * s, 50 * s, 10 * s);
+  }
+
+  const baseMesh = new THREE.Mesh(baseGeo, makeMat());
+  baseMesh.castShadow = true;
+  baseMesh.receiveShadow = true;
+  baseMesh.name = 'base';
+  group.add(baseMesh);
+
+  // Bounding box of base (used to position operations)
+  const bbox = new THREE.Box3().setFromObject(baseMesh);
+  const bsize = new THREE.Vector3();
+  bbox.getSize(bsize);
+
+  // ── Operations ──────────────────────────────
+  // Holes and pockets are visualised as outlined meshes (red = hole, dark = pocket)
+  // Fillets/chamfers shown as info only (no geometry change)
+  const holeMat = new THREE.MeshBasicMaterial({
+    color: 0xff4444,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.75,
+  });
+  const pocketMat = makeMat({ color: 0x0a1e38, opacity: 0.9, transparent: true });
+
+  operations.forEach(op => {
+    const q = op.parameters || {};
+
+    if (op.type === 'hole') {
+      const dia  = (q.diameter || 10) * s;
+      const dep  = (q.depth || bsize.y) * s;
+      const px   = (q.position?.x || 0) * s;
+      const py   = (q.position?.y || 0) * s;
+      const face = q.face || 'top';
+
+      const hGeo  = new THREE.CylinderGeometry(dia / 2, dia / 2, dep, 48);
+      const hMesh = new THREE.Mesh(hGeo, holeMat);
+
+      if (face === 'top') {
+        hMesh.position.set(px, bbox.max.y - dep / 2, py);
+      } else if (face === 'bottom') {
+        hMesh.position.set(px, bbox.min.y + dep / 2, py);
+      } else if (face === 'front') {
+        hMesh.rotation.x = Math.PI / 2;
+        hMesh.position.set(px, py, bbox.max.z - dep / 2);
+      } else if (face === 'back') {
+        hMesh.rotation.x = Math.PI / 2;
+        hMesh.position.set(px, py, bbox.min.z + dep / 2);
+      } else if (face === 'right') {
+        hMesh.rotation.z = Math.PI / 2;
+        hMesh.position.set(bbox.max.x - dep / 2, py, px);
+      } else if (face === 'left') {
+        hMesh.rotation.z = Math.PI / 2;
+        hMesh.position.set(bbox.min.x + dep / 2, py, px);
+      }
+      group.add(hMesh);
+
+    } else if (op.type === 'pocket') {
+      const pw   = (q.width  || 20) * s;
+      const ph   = (q.height || 20) * s;
+      const dep  = (q.depth  ||  5) * s;
+      const px   = (q.position?.x || 0) * s;
+      const py   = (q.position?.y || 0) * s;
+
+      const pGeo  = new THREE.BoxGeometry(pw, dep, ph);
+      const pMesh = new THREE.Mesh(pGeo, pocketMat);
+      pMesh.position.set(px, bbox.max.y - dep / 2, py);
+      group.add(pMesh);
+    }
+    // fillet / chamfer: annotated in the params panel, no geometry approximation
+  });
+
+  return group;
+}
+
+// ════════════════════════════════════════════════
+// Render schema
+// ════════════════════════════════════════════════
+function renderSchema(schema) {
+  // Remove old model
+  if (currentModel) {
+    scene.remove(currentModel);
+    currentModel.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  }
+
+  currentSchema = schema;
+  currentModel  = schemaToGroup(schema);
+  scene.add(currentModel);
+
+  applyWireframe(wireframeOn);
+
+  // Frame camera
+  const bbox   = new THREE.Box3().setFromObject(currentModel);
+  const center = new THREE.Vector3();
+  bbox.getCenter(center);
+  const bsize  = new THREE.Vector3();
+  bbox.getSize(bsize);
+  const maxDim = Math.max(bsize.x, bsize.y, bsize.z);
+
+  controls.target.copy(center);
+  const dist = maxDim * 2.2;
+  camera.position.copy(center).add(new THREE.Vector3(dist * 0.8, dist * 0.55, dist * 0.8));
+  controls.update();
+
+  grid.position.y = bbox.min.y;
+
+  updateParamsPanel(schema);
+  document.getElementById('json-editor').value = JSON.stringify(schema, null, 2);
+  setStatus(`${schema.name || 'Part'}  |  ${schema.units || 'mm'}`, 'ok');
+}
+
+function applyWireframe(on) {
+  if (!currentModel) return;
+  currentModel.traverse(o => {
+    if (o.isMesh && o.name === 'base') o.material.wireframe = on;
+  });
+}
+
+// ════════════════════════════════════════════════
+// Parameter panel
+// ════════════════════════════════════════════════
+function updateParamsPanel(schema) {
+  document.getElementById('params-empty').style.display = 'none';
+  const panel = document.getElementById('params-panel');
+  panel.style.display = 'block';
+  panel.innerHTML = '';
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'part-name';
+  nameEl.textContent = schema.name || 'Part';
+  panel.appendChild(nameEl);
+
+  const unitsEl = document.createElement('div');
+  unitsEl.className = 'part-units';
+  unitsEl.textContent = `Units: ${schema.units || 'mm'}`;
+  panel.appendChild(unitsEl);
+
+  // Base parameters
+  appendOpLabel(panel, schema.base.type.toUpperCase());
+  appendParamFields(panel, schema.base.parameters, schema.units || 'mm', () => renderSchema(schema));
+
+  // Operations
+  (schema.operations || []).forEach((op, i) => {
+    appendOpLabel(panel, `${op.type.toUpperCase()} #${i + 1}`);
+    const flatParams = flattenOpParams(op.parameters);
+    appendParamFields(panel, flatParams, schema.units || 'mm', (key, val) => {
+      setNestedParam(op.parameters, key, val);
+      renderSchema(schema);
+    });
+  });
+
+  // Wireframe toggle
+  const tr = document.createElement('div');
+  tr.className = 'toggle-row';
+  tr.innerHTML = `
+    <input type="checkbox" id="wireframe-chk" ${wireframeOn ? 'checked' : ''} />
+    <label class="toggle-label" for="wireframe-chk">Wireframe</label>
+  `;
+  tr.querySelector('#wireframe-chk').addEventListener('change', e => {
+    wireframeOn = e.target.checked;
+    applyWireframe(wireframeOn);
+  });
+  panel.appendChild(tr);
+}
+
+function appendOpLabel(parent, text) {
+  const el = document.createElement('div');
+  el.className = 'op-label';
+  el.textContent = text;
+  parent.appendChild(el);
+}
+
+function flattenOpParams(params) {
+  const out = {};
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (typeof v === 'number' || typeof v === 'string') {
+      out[k] = v;
+    } else if (k === 'position' && typeof v === 'object') {
+      if (typeof v.x === 'number') out['pos.x'] = v.x;
+      if (typeof v.y === 'number') out['pos.y'] = v.y;
+    }
+  });
+  return out;
+}
+
+function setNestedParam(params, key, val) {
+  if (key.startsWith('pos.')) {
+    const axis = key.split('.')[1];
+    if (!params.position) params.position = {};
+    params.position[axis] = val;
+  } else {
+    params[key] = val;
+  }
+}
+
+function appendParamFields(parent, params, unit, onChange) {
+  Object.entries(params || {}).forEach(([key, val]) => {
+    if (typeof val === 'number') {
+      const row = document.createElement('div');
+      row.className = 'param-row';
+
+      const lbl = document.createElement('span');
+      lbl.className = 'param-label';
+      lbl.textContent = key;
+
+      const inp = document.createElement('input');
+      inp.type  = 'number';
+      inp.value = val;
+      inp.step  = 0.5;
+      inp.min   = 0.1;
+      inp.addEventListener('change', () => {
+        const v = parseFloat(inp.value);
+        if (!isNaN(v) && v > 0) {
+          if (typeof onChange === 'function') {
+            if (onChange.length >= 2) onChange(key, v);
+            else { params[key] = v; onChange(); }
+          }
+        }
+      });
+
+      const unitEl = document.createElement('span');
+      unitEl.className = 'param-unit';
+      unitEl.textContent = unit;
+
+      row.appendChild(lbl);
+      row.appendChild(inp);
+      row.appendChild(unitEl);
+      parent.appendChild(row);
+    } else if (typeof val === 'string' && key !== 'face' && key !== 'edges') {
+      // non-numeric string fields are display-only
+    }
+  });
+}
+
+// ════════════════════════════════════════════════
+// Claude API
+// ════════════════════════════════════════════════
+const SYSTEM_PROMPT = `You are an expert at interpreting amateur freehand engineering sketches and blueprints drawn by hobbyists with no formal drafting training. The sketches may be rough, unlabeled, or disproportionate.
+
+Analyze the image and produce a JSON object that exactly matches this schema:
+
+{
+  "name": "short descriptive name of the part",
+  "units": "mm",
+  "base": {
+    "type": "box | cylinder | sphere | cone | torus",
+    "parameters": {
+      (include ONLY the fields for the chosen type)
+      box      → "width": number, "height": number, "depth": number
+      cylinder → "radius": number, "height": number
+      sphere   → "radius": number
+      cone     → "radius1": number, "radius2": number, "height": number
+      torus    → "radius": number, "tube": number
+    }
+  },
+  "operations": [
+    (zero or more of:)
+    { "type": "hole",    "parameters": { "diameter": number, "depth": number, "position": {"x": number, "y": number}, "face": "top|bottom|front|back|left|right" } },
+    { "type": "pocket",  "parameters": { "width": number, "height": number, "depth": number, "position": {"x": number, "y": number}, "face": "top|bottom|front|back|left|right" } },
+    { "type": "fillet",  "parameters": { "radius": number, "edges": "all|top|bottom|vertical" } },
+    { "type": "chamfer", "parameters": { "distance": number, "edges": "all|top|bottom|vertical" } }
+  ]
+}
+
+Rules:
+- units: use "in" if you detect imperial markings, otherwise "mm"
+- If dimensions are not labeled, estimate them proportionally from the sketch
+- operations can be an empty array []
+- position x/y are offsets from the center of the chosen face
+- Return ONLY valid JSON. No markdown, no code fences, no prose.`;
+
+async function analyzeBlueprint() {
+  const key = document.getElementById('api-key').value.trim();
+  if (!key)          { showAnalyzeMsg('Please enter your API key.', 'error'); return; }
+  if (!imageBase64)  { showAnalyzeMsg('Please upload an image first.', 'error'); return; }
+
+  showLoading(true, 'Analyzing blueprint with Claude Vision...');
+  showAnalyzeMsg('', '');
+
+  try {
+    // Extract mime type and base64 data from data URL
+    const comma    = imageBase64.indexOf(',');
+    const meta     = imageBase64.substring(0, comma);          // e.g. "data:image/png;base64"
+    const b64data  = imageBase64.substring(comma + 1);
+    const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-calls': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-8',
+        max_tokens: 1200,
+        system: SYSTEM_PROMPT,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mimeType, data: b64data } },
+            { type: 'text',  text: 'Analyze this blueprint sketch and return the JSON.' }
+          ]
+        }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `API ${res.status}`);
+    }
+
+    const data = await res.json();
+    let text = (data.content?.[0]?.text || '').trim();
+
+    // Strip accidental markdown code fences
+    text = text.replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/im, '').trim();
+
+    const schema = JSON.parse(text);
+    renderSchema(schema);
+    showAnalyzeMsg('Analysis complete!', 'success');
+
+    // Switch to parameters tab
+    activateTab('params');
+
+  } catch (e) {
+    showAnalyzeMsg(`Error: ${e.message}`, 'error');
+    setStatus(`Analysis failed — ${e.message}`, 'err');
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ════════════════════════════════════════════════
+// UI helpers
+// ════════════════════════════════════════════════
+function setStatus(msg, cls = '') {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  el.className   = cls;
+}
+
+function showAnalyzeMsg(msg, type = '') {
+  const el = document.getElementById('analyze-msg');
+  el.textContent = msg;
+  el.className   = `msg ${type}`;
+}
+
+function showLoading(on, text = '') {
+  const el = document.getElementById('loading');
+  el.classList.toggle('active', on);
+  if (text) document.getElementById('loading-text').textContent = text;
+}
+
+function activateTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`));
+}
+
+// ════════════════════════════════════════════════
+// File upload
+// ════════════════════════════════════════════════
+const uploadArea  = document.getElementById('upload-area');
+const fileInput   = document.getElementById('file-input');
+const previewImg  = document.getElementById('preview-img');
+const placeholder = document.getElementById('upload-placeholder');
+const analyzeBtn  = document.getElementById('analyze-btn');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+
+uploadArea.addEventListener('dragover', e => {
+  e.preventDefault();
+  uploadArea.classList.add('drag-over');
+});
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f?.type.startsWith('image/')) loadFile(f);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) loadFile(fileInput.files[0]);
+});
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    imageBase64          = e.target.result;
+    previewImg.src       = imageBase64;
+    previewImg.style.display  = 'block';
+    placeholder.style.display = 'none';
+    analyzeBtn.disabled  = false;
+    setStatus('Blueprint loaded — click "Analyze Blueprint" to continue.', 'info');
+  };
+  reader.readAsDataURL(file);
+}
+
+analyzeBtn.addEventListener('click', analyzeBlueprint);
+
+// ════════════════════════════════════════════════
+// Tabs
+// ════════════════════════════════════════════════
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => activateTab(tab.dataset.tab));
+});
+
+// ════════════════════════════════════════════════
+// Apply raw JSON
+// ════════════════════════════════════════════════
+document.getElementById('apply-json-btn').addEventListener('click', () => {
+  const msgEl = document.getElementById('json-msg');
+  try {
+    const schema = JSON.parse(document.getElementById('json-editor').value);
+    renderSchema(schema);
+    msgEl.textContent = 'Applied!';
+    msgEl.className   = 'msg success';
+  } catch (e) {
+    msgEl.textContent = `Invalid JSON: ${e.message}`;
+    msgEl.className   = 'msg error';
+  }
+  setTimeout(() => { msgEl.textContent = ''; }, 3000);
+});
+
+// ════════════════════════════════════════════════
+// View presets
+// ════════════════════════════════════════════════
+function snapCamera(pos, up = new THREE.Vector3(0, 1, 0)) {
+  const target = controls.target.clone();
+  const dist   = camera.position.distanceTo(target);
+  camera.position.copy(target).add(pos.clone().normalize().multiplyScalar(dist));
+  camera.up.copy(up);
+  controls.update();
+}
+
+document.getElementById('btn-top').addEventListener('click',   () => snapCamera(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, -1)));
+document.getElementById('btn-front').addEventListener('click', () => snapCamera(new THREE.Vector3(0, 0, 1)));
+document.getElementById('btn-side').addEventListener('click',  () => snapCamera(new THREE.Vector3(1, 0, 0)));
+document.getElementById('btn-iso').addEventListener('click',   () => snapCamera(new THREE.Vector3(1, 0.7, 1)));
+
+</script>
+</body>
+</html>
