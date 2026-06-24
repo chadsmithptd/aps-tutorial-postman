@@ -231,6 +231,33 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Server warning banner ── */
+    .server-warning {
+      display: none;
+      background: #3a1a00;
+      border-bottom: 1px solid #ff8c00;
+      padding: 10px 20px;
+      font-size: 12px;
+      color: #ffcc80;
+      flex-shrink: 0;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .server-warning.visible { display: flex; }
+    .server-warning strong { color: #ffab40; }
+    .server-warning code {
+      background: #1a0d00;
+      border: 1px solid #5a3000;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: #ffe082;
+      cursor: pointer;
+      user-select: all;
+    }
+    .server-warning code:hover { border-color: #ffab40; }
+
     /* ── Status bar ── */
     .statusbar {
       background: #0a1628;
@@ -288,6 +315,19 @@
   <h1>Blueprint → 3D</h1>
   <span>Powered by Claude Vision</span>
 </header>
+
+<!-- File:// warning banner -->
+<div class="server-warning" id="server-warning">
+  <span>⚠️</span>
+  <span>
+    <strong>Local server required.</strong>
+    Browsers block API calls from <code>file://</code> URLs.
+    Open a terminal in the folder containing this file and run one of:<br /><br />
+    Python &nbsp;<code>python3 -m http.server 8080</code><br />
+    Node &nbsp;&nbsp;&nbsp;<code>npx serve .</code><br /><br />
+    Then open <code>http://localhost:8080/blueprint-to-3d.html</code> in your browser.
+  </span>
+</div>
 
 <div class="main">
 
@@ -381,6 +421,11 @@
 </script>
 
 <script type="module">
+// Detect file:// and show warning
+if (location.protocol === 'file:') {
+  document.getElementById('server-warning').classList.add('visible');
+}
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
@@ -841,8 +886,13 @@ async function analyzeBlueprint() {
     activateTab('params');
 
   } catch (e) {
-    showAnalyzeMsg(`Error: ${e.message}`, 'error');
-    setStatus(`Analysis failed — ${e.message}`, 'err');
+    const isNetwork = e instanceof TypeError && e.message.toLowerCase().includes('fetch');
+    const msg = isNetwork
+      ? 'Network error — if you opened this file directly, serve it from a local server first (see banner above).'
+      : `Error: ${e.message}`;
+    showAnalyzeMsg(msg, 'error');
+    setStatus(`Analysis failed — ${isNetwork ? 'network/CORS error' : e.message}`, 'err');
+    if (isNetwork) document.getElementById('server-warning').classList.add('visible');
   } finally {
     showLoading(false);
   }
