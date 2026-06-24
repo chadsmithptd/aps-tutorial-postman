@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blueprint Analyzer — Manufacturing Route Sheet Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --bg-card: #1c2128;
+            --border: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-blue: #58a6ff;
+            --accent-blue-dark: #1f6feb;
+            --accent-green: #3fb950;
+            --accent-amber: #d29922;
+            --accent-red: #f85149;
+            --accent-purple: #bc8cff;
+            --accent-orange: #db6d28;
+            --accent-cyan: #39d3f0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+            overflow: hidden;
+        }
+
+        /* ── Header ── */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 54px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            background: linear-gradient(135deg, #1f6feb, #58a6ff);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .brand-icon svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .brand-text h1 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+        }
+
+        .brand-text p {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        .header-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .version-badge {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 2px 7px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.03em;
+        }
+
+        /* ── API Bar ── */
+        .api-bar {
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .api-bar-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+        }
+
+        .api-input-wrap { position: relative; flex: 1; max-width: 400px; }
+
+        .api-input {
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: var(--text-primary);
+            font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .api-input:focus { border-color: var(--accent-blue); }
+
+        .api-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .api-pill.ok {
+            background: rgba(63,185,80,0.12);
+            color: #3fb950;
+            border: 1px solid rgba(63,185,80,0.25);
+        }
+
+        .api-pill.missing {
+            background: rgba(248,81,73,0.1);
+            color: #f85149;
+            border: 1px solid rgba(248,81,73,0.2);
+        }
+
+        .api-pill-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .api-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* ── Layout ── */
+        .app-body {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            height: calc(100vh - 96px);
+            overflow: hidden;
+        }
+
+        /* ── Left Panel ── */
+        .left-panel {
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+
+        .panel-head {
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .panel-head-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--text-muted);
+        }
+
+        .left-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        /* Upload Zone */
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            padding: 28px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg-card);
+            position: relative;
+        }
+
+        .drop-zone:hover, .drop-zone.over {
+            border-color: var(--accent-blue);
+            background: rgba(88,166,255,0.04);
+        }
+
+        .drop-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+
+        .drop-icon {
+            width: 44px;
+            height: 44px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 14px;
+        }
+
+        .drop-icon svg {
+            width: 22px;
+            height: 22px;
+            stroke: var(--text-secondary);
+            fill: none;
+        }
+
+        .drop-primary {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .drop-secondary {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .format-chips {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .fmt {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            letter-spacing: 0.04em;
+        }
+
+        /* File card */
+        .file-card {
+            display: none;
+            margin-top: 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-card.show { display: flex; }
+
+        .file-thumb {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .file-thumb.pdf { background: rgba(248,81,73,0.12); }
+        .file-thumb.img { background: rgba(88,166,255,0.12); }
+
+        .file-info { flex: 1; min-width: 0; }
+
+        .file-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-size {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .file-clear {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 4px;
+            border-radius: 4px;
+            transition: color 0.15s;
+            display: flex;
+        }
+
+        .file-clear:hover { color: var(--accent-red); }
+
+        /* Preview */
+        .preview-box {
+            display: none;
+            margin-top: 12px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+
+        .preview-box.show { display: block; }
+
+        #preview-canvas { width: 100%; height: auto; display: block; }
+
+        /* Analyze button */
+        .btn-analyze {
+            display: none;
+            width: 100%;
+            margin-top: 14px;
+            padding: 11px 0;
+            background: var(--accent-blue-dark);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.15s;
+            letter-spacing: 0.01em;
+        }
+
+        .btn-analyze.show { display: flex; }
+        .btn-analyze:hover:not(:disabled) { background: #388bfd; }
+        .btn-analyze:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        .btn-analyze svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            fill: none;
+        }
+
+        /* ── Right Panel ── */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Tab bar */
+        .tab-bar {
+            display: flex;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0 16px;
+            flex-shrink: 0;
+        }
+
+        .tab-btn {
+            padding: 11px 13px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: all 0.15s;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        .tab-btn:hover { color: var(--text-primary); }
+
+        .tab-btn.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+        }
+
+        .tab-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            min-width: 17px;
+            height: 17px;
+            padding: 0 4px;
+            margin-left: 5px;
+            color: var(--text-secondary);
+        }
+
+        /* Tab content area */
+        .tab-area {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: var(--bg-primary);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            gap: 16px;
+        }
+
+        .loading-overlay.show { display: flex; }
+
+        .spinner-ring {
+            width: 44px;
+            height: 44px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .loading-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: -8px;
+        }
+
+        /* Tab panes */
+        .tab-pane {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        .tab-pane.active { display: block; }
+
+        .pane-inner { padding: 20px; }
+
+        /* Empty state */
+        .empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 64px 24px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .empty svg {
+            width: 44px;
+            height: 44px;
+            stroke: var(--border);
+            fill: none;
+            margin-bottom: 14px;
+        }
+
+        .empty h3 {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .empty p { font-size: 11px; }
+
+        /* ── Routing Sheet ── */
+        .totals-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .total-card {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+
+        .total-card-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .total-card-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .total-card-unit {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-left: 3px;
+        }
+
+        .error-box {
+            background: rgba(248,81,73,0.08);
+            border: 1px solid rgba(248,81,73,0.25);
+            border-radius: 8px;
+            padding: 12px 14px;
+            color: #f85149;
+            font-size: 12px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .error-box.show { display: block; }
+
+        /* Routing table */
+        .rt-wrap {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .rt {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .rt thead th {
+            background: var(--bg-secondary);
+            padding: 9px 12px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--text-muted);
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .rt tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: background 0.1s;
+        }
+
+        .rt tbody tr:last-child { border-bottom: none; }
+        .rt tbody tr:hover { background: var(--bg-tertiary); }
+
+        .rt tbody td { padding: 0; vertical-align: top; }
+
+        .td-op {
+            padding: 14px 12px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            width: 46px;
+        }
+
+        .td-machine { padding: 14px 10px; width: 150px; }
+
+        .machine-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px 4px 7px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .chip-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .td-desc { padding: 14px 10px; }
+
+        .op-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+        }
+
+        .op-steps {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.65;
+        }
+
+        .op-step::before { content: "• "; }
+
+        .op-note {
+            font-size: 11px;
+            color: var(--accent-amber);
+            margin-top: 4px;
+        }
+
+        .td-time { padding: 14px 12px; width: 88px; text-align: right; }
+
+        .time-run {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .time-run-unit { font-size: 10px; color: var(--text-muted); }
+
+        .time-setup { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+        /* ── Part Summary ── */
+        .info-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 14px;
+        }
+
+        .info-card-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .info-item label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .info-item value {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            display: block;
+        }
+
+        .confidence-wrap { margin-top: 14px; }
+
+        .confidence-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 11px;
+        }
+
+        .confidence-header span:first-child { color: var(--text-muted); }
+        .confidence-header span:last-child { color: var(--text-secondary); font-weight: 600; }
+
+        .conf-track {
+            height: 5px;
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .conf-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 9px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-low    { background: rgba(63,185,80,0.12);  color: #3fb950; border: 1px solid rgba(63,185,80,0.25); }
+        .badge-medium { background: rgba(210,153,34,0.12); color: #d29922; border: 1px solid rgba(210,153,34,0.25); }
+        .badge-high   { background: rgba(248,81,73,0.1);   color: #f85149; border: 1px solid rgba(248,81,73,0.2); }
+        .badge-very_high { background: rgba(188,140,255,0.12); color: #bc8cff; border: 1px solid rgba(188,140,255,0.25); }
+
+        /* ── Features ── */
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+        }
+
+        .feature-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .feat-type {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 2px 7px;
+            border-radius: 4px;
+        }
+
+        .feat-id { font-size: 10px; color: var(--text-muted); font-family: monospace; }
+
+        .feat-qty {
+            margin-left: auto;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .feat-desc {
+            font-size: 12px;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .feat-meta { font-size: 11px; color: var(--text-muted); }
+
+        .feat-tol {
+            margin-left: 10px;
+            color: var(--accent-amber);
+        }
+
+        /* ── Notes ── */
+        .note-card {
+            display: flex;
+            gap: 10px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent-amber);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .note-icon { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
+
+        .analyst-box {
+            margin-top: 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+        }
+
+        .analyst-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .analyst-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        /* ── Actions bar ── */
+        .actions-bar {
+            padding: 8px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-secondary);
+            display: none;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .actions-bar.show { display: flex; }
+
+        .btn-action {
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-action:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+
+        .btn-action svg { width: 12px; height: 12px; stroke: currentColor; fill: none; }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* Print */
+        @media print {
+            .header, .api-bar, .left-panel, .tab-bar, .actions-bar { display: none !important; }
+            body { background: white; color: black; overflow: auto; }
+            .app-body { display: block; height: auto; grid-template-columns: 1fr; }
+            .right-panel { height: auto; overflow: visible; }
+            .tab-area { overflow: visible; height: auto; }
+            .tab-pane { display: block !important; height: auto; overflow: visible; }
+            .info-card, .feature-card, .note-card { border: 1px solid #ccc; }
+            .rt thead th { background: #f0f0f0; }
+            .pane-inner { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ══ Header ══ -->
+<header class="header">
+    <div class="header-brand">
+        <div class="brand-icon">
+            <svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 3h20v2H2V3zm0 4h14v2H2V7zm0 4h20v2H2v-2zm0 4h14v2H2v-2zm0 4h20v2H2v-2z" opacity=".4"/>
+                <rect x="16" y="6" width="6" height="6" rx="1"/>
+            </svg>
+        </div>
+        <div class="brand-text">
+            <h1>Blueprint Analyzer</h1>
+            <p>Manufacturing Route Sheet Generator</p>
+        </div>
+    </div>
+    <div class="header-meta">
+        <span class="version-badge">v1.0</span>
+        Powered by Claude Vision
+    </div>
+</header>
+
+<!-- ══ API Key Bar ══ -->
+<div class="api-bar">
+    <span class="api-bar-label">API Key</span>
+    <div class="api-input-wrap">
+        <input type="password" id="api-key" class="api-input"
+               placeholder="sk-ant-api03-..." autocomplete="off" spellcheck="false">
+    </div>
+    <div id="api-pill" class="api-pill missing">
+        <div class="api-pill-dot"></div>
+        No key
+    </div>
+    <span class="api-hint">Stored in session only — never leaves your browser except to Anthropic</span>
+</div>
+
+<!-- ══ App Body ══ -->
+<div class="app-body">
+
+    <!-- Left: Upload + Preview -->
+    <div class="left-panel">
+        <div class="panel-head">
+            <span class="panel-head-title">Blueprint Input</span>
+            <span id="ready-badge" style="display:none;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;background:rgba(63,185,80,0.12);color:#3fb950;border:1px solid rgba(63,185,80,0.25)">Ready</span>
+        </div>
+        <div class="left-body">
+
+            <!-- Drop zone -->
+            <div id="drop-zone" class="drop-zone">
+                <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.tiff,.tif,.webp,.bmp">
+                <div class="drop-icon">
+                    <svg viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+                    </svg>
+                </div>
+                <div class="drop-primary">Drop blueprint here</div>
+                <div class="drop-secondary">or click to browse your files</div>
+                <div class="format-chips">
+                    <span class="fmt">PDF</span>
+                    <span class="fmt">PNG</span>
+                    <span class="fmt">JPG</span>
+                    <span class="fmt">TIFF</span>
+                    <span class="fmt">WEBP</span>
+                </div>
+            </div>
+
+            <!-- File card -->
+            <div id="file-card" class="file-card">
+                <div id="file-thumb" class="file-thumb pdf">📄</div>
+                <div class="file-info">
+                    <div id="file-name" class="file-name">—</div>
+                    <div id="file-size" class="file-size">—</div>
+                </div>
+                <button class="file-clear" id="file-clear" title="Remove file">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Canvas preview -->
+            <div id="preview-box" class="preview-box">
+                <canvas id="preview-canvas"></canvas>
+            </div>
+
+            <!-- Analyze button -->
+            <button id="btn-analyze" class="btn-analyze" disabled>
+                <svg viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .116 2.648-1.388 2.648H4.186c-1.504 0-2.388-1.648-1.388-2.648L4.2 15.3"/>
+                </svg>
+                Analyze Blueprint
+            </button>
+
+        </div>
+    </div>
+
+    <!-- Right: Results -->
+    <div class="right-panel">
+
+        <!-- Tabs -->
+        <div class="tab-bar">
+            <div class="tab-btn active" data-tab="routing">Routing Sheet</div>
+            <div class="tab-btn" data-tab="summary">Part Summary</div>
+            <div class="tab-btn" data-tab="features">
+                Features <span id="feat-count" class="tab-count">0</span>
+            </div>
+            <div class="tab-btn" data-tab="notes">Notes</div>
+        </div>
+
+        <div class="tab-area">
+
+            <!-- Loading overlay -->
+            <div id="loading" class="loading-overlay">
+                <div class="spinner-ring"></div>
+                <div class="loading-label" id="loading-label">Sending to Claude Vision...</div>
+                <div class="loading-sub">Analyzing geometry, dimensions & features</div>
+            </div>
+
+            <!-- Routing Sheet pane -->
+            <div id="pane-routing" class="tab-pane active">
+                <div class="pane-inner">
+                    <div id="routing-empty" class="empty">
+                        <svg viewBox="0 0 24 24" stroke-width="1" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z"/>
+                        </svg>
+                        <h3>No routing sheet yet</h3>
+                        <p>Upload a blueprint and click Analyze Blueprint</p>
+                    </div>
+                    <div id="routing-result" style="display:none">
+                        <div id="error-box" class="error-box"></div>
+                        <div class="totals-row">
+                            <div class="total-card">
+                                <div class="total-card-label">Total Run Time</div>
+                                <div><span id="total-run" class="total-card-value">—</span><span class="total-card-unit">min</span></div>
+                            </div>
+                            <div class="total-card">
+                                <div class="total-card-label">Total Setup Time</div>
+                                <div><span id="total-setup" class="total-card-value">—</span><span class="total-card-unit">min</span></div>
+                            </div>
+                            <div class="total-card">
+                                <div class="total-card-label">Operations</div>
+                                <div><span id="total-ops" class="total-card-value">—</span></div>
+                            </div>
+                        </div>
+                        <div class="rt-wrap">
+                            <table class="rt">
+                                <thead>
+                                    <tr>
+                                        <th style="width:46px">Op</th>
+                                        <th style="width:150px">Machine</th>
+                                        <th>Description</th>
+                                        <th style="width:88px;text-align:right">Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rt-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary pane -->
+            <div id="pane-summary" class="tab-pane">
+                <div class="pane-inner">
+                    <div id="summary-empty" class="empty">
+                        <svg viewBox="0 0 24 24" stroke-width="1" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+                        </svg>
+                        <h3>No part data yet</h3>
+                        <p>Run an analysis to see part information</p>
+                    </div>
+                    <div id="summary-result" style="display:none">
+                        <div class="info-card">
+                            <div class="info-card-title">Part Information</div>
+                            <div class="info-grid">
+                                <div class="info-item"><label>Part Name</label><value id="s-name">—</value></div>
+                                <div class="info-item"><label>Drawing No.</label><value id="s-num">—</value></div>
+                                <div class="info-item"><label>Material</label><value id="s-mat">—</value></div>
+                                <div class="info-item"><label>Overall Dimensions</label><value id="s-dims">—</value></div>
+                                <div class="info-item"><label>Surface Finish</label><value id="s-fin">—</value></div>
+                                <div class="info-item"><label>Quantity</label><value id="s-qty">—</value></div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-card-title">Analysis Metadata</div>
+                            <div class="info-grid">
+                                <div class="info-item"><label>Part Type</label><value id="s-type">—</value></div>
+                                <div class="info-item"><label>Complexity</label><span id="s-complexity">—</span></div>
+                            </div>
+                            <div class="confidence-wrap">
+                                <div class="confidence-header">
+                                    <span>Analysis Confidence</span>
+                                    <span id="s-conf-pct">—</span>
+                                </div>
+                                <div class="conf-track">
+                                    <div id="s-conf-fill" class="conf-fill" style="width:0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features pane -->
+            <div id="pane-features" class="tab-pane">
+                <div class="pane-inner">
+                    <div id="features-empty" class="empty">
+                        <svg viewBox="0 0 24 24" stroke-width="1" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0l4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0l-5.571 3-5.571-3"/>
+                        </svg>
+                        <h3>No features detected</h3>
+                        <p>Run an analysis to extract part features</p>
+                    </div>
+                    <div id="features-result" style="display:none">
+                        <div id="features-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notes pane -->
+            <div id="pane-notes" class="tab-pane">
+                <div class="pane-inner">
+                    <div id="notes-empty" class="empty">
+                        <svg viewBox="0 0 24 24" stroke-width="1" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/>
+                        </svg>
+                        <h3>No special requirements</h3>
+                        <p>Notes and special callouts will appear here</p>
+                    </div>
+                    <div id="notes-result" style="display:none">
+                        <div id="notes-list"></div>
+                        <div id="analyst-box" class="analyst-box" style="display:none">
+                            <div class="analyst-label">Analyst Notes</div>
+                            <div id="analyst-text" class="analyst-text"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /tab-area -->
+
+        <!-- Actions bar (shown after analysis) -->
+        <div id="actions-bar" class="actions-bar">
+            <button class="btn-action" onclick="window.print()">
+                <svg viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.056 48.056 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z"/>
+                </svg>
+                Print Routing Sheet
+            </button>
+            <button class="btn-action" onclick="exportJSON()">
+                <svg viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+                </svg>
+                Export JSON
+            </button>
+        </div>
+
+    </div><!-- /right-panel -->
+</div><!-- /app-body -->
+
+<script>
+// ── PDF.js ──────────────────────────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── State ───────────────────────────────────────────────────────────────────
+let imgB64 = null;
+let imgType = 'image/png';
+let lastResult = null;
+
+// ── API Key ──────────────────────────────────────────────────────────────────
+const apiKeyEl = document.getElementById('api-key');
+const apiPill  = document.getElementById('api-pill');
+
+const saved = sessionStorage.getItem('bp_api_key');
+if (saved) { apiKeyEl.value = saved; updateKeyPill(); }
+
+apiKeyEl.addEventListener('input', () => {
+    sessionStorage.setItem('bp_api_key', apiKeyEl.value.trim());
+    updateKeyPill();
+    refreshAnalyzeBtn();
+});
+
+function updateKeyPill() {
+    const ok = apiKeyEl.value.trim().startsWith('sk-ant-');
+    apiPill.className = 'api-pill ' + (ok ? 'ok' : 'missing');
+    apiPill.innerHTML = `<div class="api-pill-dot"></div>${ok ? 'Key set' : 'No key'}`;
+}
+
+// ── File Upload ──────────────────────────────────────────────────────────────
+const dropZone  = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('over');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+document.getElementById('file-clear').addEventListener('click', clearFile);
+
+async function handleFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const isPDF = ext === 'pdf';
+    const isImg = ['png','jpg','jpeg','tiff','tif','webp','bmp'].includes(ext);
+    if (!isPDF && !isImg) { alert('Unsupported file type. Use PDF or image.'); return; }
+
+    document.getElementById('file-name').textContent = file.name;
+    document.getElementById('file-size').textContent = fmtSize(file.size) + ' · ' + (isPDF ? 'PDF' : 'Image');
+    document.getElementById('file-thumb').textContent = isPDF ? '📄' : '🖼️';
+    document.getElementById('file-thumb').className = 'file-thumb ' + (isPDF ? 'pdf' : 'img');
+    document.getElementById('file-card').classList.add('show');
+    document.getElementById('ready-badge').style.display = 'inline-block';
+
+    if (isPDF) await loadPDF(file);
+    else       await loadImage(file);
+
+    refreshAnalyzeBtn();
+}
+
+async function loadPDF(file) {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const page = await pdf.getPage(1);
+    const vp = page.getViewport({ scale: 2.0 });
+    const canvas = document.getElementById('preview-canvas');
+    canvas.width  = vp.width;
+    canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    document.getElementById('preview-box').classList.add('show');
+    imgB64  = canvas.toDataURL('image/png').split(',')[1];
+    imgType = 'image/png';
+}
+
+async function loadImage(file) {
+    return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.getElementById('preview-canvas');
+                const maxW = 1400;
+                const s = img.width > maxW ? maxW / img.width : 1;
+                canvas.width  = img.width  * s;
+                canvas.height = img.height * s;
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                document.getElementById('preview-box').classList.add('show');
+                imgB64  = canvas.toDataURL('image/png').split(',')[1];
+                imgType = 'image/png';
+                resolve();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function clearFile() {
+    imgB64 = null;
+    imgType = 'image/png';
+    fileInput.value = '';
+    document.getElementById('file-card').classList.remove('show');
+    document.getElementById('preview-box').classList.remove('show');
+    document.getElementById('ready-badge').style.display = 'none';
+    document.getElementById('preview-canvas').getContext('2d')
+        .clearRect(0, 0, 9999, 9999);
+    refreshAnalyzeBtn();
+}
+
+function refreshAnalyzeBtn() {
+    const btn = document.getElementById('btn-analyze');
+    const ready = imgB64 && apiKeyEl.value.trim().startsWith('sk-ant-');
+    btn.classList.toggle('show', imgB64 !== null);
+    btn.disabled = !ready;
+}
+
+// ── Analysis ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-analyze').addEventListener('click', runAnalysis);
+
+async function runAnalysis() {
+    const key = apiKeyEl.value.trim();
+    if (!key || !imgB64) return;
+
+    showLoading(true);
+    resetResults();
+
+    try {
+        setLoadingLabel('Sending blueprint to Claude Vision...');
+
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': key,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-opus-4-8',
+                max_tokens: 4096,
+                messages: [{
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'image',
+                            source: { type: 'base64', media_type: imgType, data: imgB64 }
+                        },
+                        { type: 'text', text: buildPrompt() }
+                    ]
+                }]
+            })
+        });
+
+        setLoadingLabel('Processing manufacturing analysis...');
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err?.error?.message || 'API error ' + res.status);
+        }
+
+        const data   = await res.json();
+        const text   = data.content[0].text;
+        const match  = text.match(/```json\s*([\s\S]*?)\s*```/) ||
+                       text.match(/```\s*([\s\S]*?)\s*```/)     ||
+                       text.match(/(\{[\s\S]*\})/);
+
+        if (!match) throw new Error('Could not parse response. Please try again.');
+
+        const parsed = JSON.parse(match[1]);
+        lastResult   = parsed;
+        render(parsed);
+
+    } catch (err) {
+        showLoading(false);
+        renderError(err.message);
+    }
+}
+
+function buildPrompt() {
+    return `You are a senior manufacturing engineer and CNC programmer. Analyze this engineering blueprint carefully and produce a complete shop routing sheet.
+
+Return ONLY a JSON object wrapped in \`\`\`json ... \`\`\` — no other text. Use this exact schema:
+
+\`\`\`json
+{
+  "part": {
+    "name": "part name or 'Unknown'",
+    "number": "drawing/part number or 'N/A'",
+    "material": "full material spec (e.g. 6061-T6 Aluminum, 4140 Steel HT)",
+    "overall_dimensions": "L × W × H  or  OD × L for round parts",
+    "surface_finish": "general finish callout (e.g. 125 Ra, 63 Ra, as-machined)",
+    "quantity": 1
+  },
+  "features": [
+    {
+      "id": "F1",
+      "type": "hole|bore|pocket|slot|thread|OD|ID|face|contour|keyway|chamfer|fillet|groove|tab|rib|spline|knurl|other",
+      "description": "clear plain-English description",
+      "dimensions": "size, depth, or length as shown on drawing",
+      "tolerance": "tolerance if explicitly called out, else omit or null",
+      "quantity": 1
+    }
+  ],
+  "routing": [
+    {
+      "op": 10,
+      "machine": "exact machine name (e.g. CNC Lathe, Bandsaw, VMC)",
+      "operation_type": "Saw|Lathe|Mill|Drill|Grinder|EDM|Weld|Heat Treat|Outside Process|Inspect|Bench",
+      "description": "one-line operation summary",
+      "details": [
+        "specific machining step 1",
+        "specific machining step 2"
+      ],
+      "estimated_minutes": 20,
+      "setup_minutes": 15,
+      "notes": "tooling, fixturing, or special setup note (omit if none)"
+    }
+  ],
+  "special_requirements": [
+    "list any special callouts: certs required, first-article inspection, witness points, etc."
+  ],
+  "part_type": "rotational|prismatic|sheet|weldment|other",
+  "complexity": "low|medium|high|very_high",
+  "confidence_percent": 80,
+  "analysis_notes": "caveats: drawing quality, assumptions, anything unclear"
+}
+\`\`\`
+
+ROUTING RULES — follow strictly:
+1. First op is always Bandsaw / Cold Saw when working from bar stock, plate, or tube
+2. Rotational parts: CNC Lathe operations come BEFORE any mill operations
+3. Prismatic parts: VMC or HMC is the primary machine
+4. Hole sequence: Drill → Ream (if tolerance < ±0.001") → Tap (if threaded)
+5. Any tolerance tighter than ±0.001" (0.025 mm): add a grinding operation after rough machining
+6. Heat treat goes BEFORE final finish grinding — never after plating or coating
+7. Outside processes (anodize, plate, black oxide, passivate, coat) go near the end before final inspection
+8. Final operation is ALWAYS CMM or dimensional inspection
+9. Add a Deburr / Bench operation after milling, drilling, or turning if burrs are likely
+10. Sequence operations to minimize setups and part handling
+11. Op numbers increment by 10 (10, 20, 30 …)
+
+MACHINE TYPES (use these exact names):
+Bandsaw, Cold Saw, CNC Lathe, Manual Lathe, VMC (Vertical Mill), HMC (Horizontal Mill),
+5-Axis Mill, Drill Press, Surface Grinder, Cylindrical Grinder, ID Grinder,
+Wire EDM, Sinker EDM, MIG Weld, TIG Weld, Heat Treat, Outside Process,
+Deburr / Bench, CMM Inspect
+
+Look carefully at:
+- Title block: part name, drawing number, material, revision, scale
+- All dimension strings and tolerance callouts (±, h7, H8, etc.)
+- Surface finish symbols (√, Ra, RMS, 63/, 125/, 32/, etc.)
+- GD&T feature control frames (flatness, perpendicularity, true position, etc.)
+- Thread callouts: UNC, UNF, metric M, pipe NPT
+- Notes section and revision history
+- All drawing views (front, top, side, section, auxiliary) to understand full 3D geometry
+- Section cuts revealing internal features`;
+}
+
+// ── Render Results ────────────────────────────────────────────────────────────
+function render(d) {
+    showLoading(false);
+    renderRouting(d.routing || []);
+    renderSummary(d);
+    renderFeatures(d.features || []);
+    renderNotes(d);
+    document.getElementById('actions-bar').classList.add('show');
+}
+
+function renderRouting(ops) {
+    const tbody   = document.getElementById('rt-body');
+    tbody.innerHTML = '';
+
+    let totalRun   = 0;
+    let totalSetup = 0;
+
+    ops.forEach(op => {
+        const { color, bg } = machineStyle(op.operation_type);
+        const run   = op.estimated_minutes || 0;
+        const setup = op.setup_minutes     || 0;
+        totalRun   += run;
+        totalSetup += setup;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="td-op">${String(op.op).padStart(2,'0')}</td>
+            <td class="td-machine">
+                <div class="machine-chip" style="background:${bg};border:1px solid ${color}40">
+                    <div class="chip-dot" style="background:${color}"></div>
+                    <span style="color:${color}">${op.machine || op.operation_type}</span>
+                </div>
+            </td>
+            <td class="td-desc">
+                <div class="op-title">${op.description || ''}</div>
+                <div class="op-steps">
+                    ${(op.details || []).map(s => `<div class="op-step">${s}</div>`).join('')}
+                </div>
+                ${op.notes ? `<div class="op-note">⚑ ${op.notes}</div>` : ''}
+            </td>
+            <td class="td-time">
+                <div class="time-run">${run}<span class="time-run-unit"> min</span></div>
+                ${setup ? `<div class="time-setup">+${setup} setup</div>` : ''}
+            </td>`;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('total-run').textContent   = totalRun;
+    document.getElementById('total-setup').textContent = totalSetup;
+    document.getElementById('total-ops').textContent   = ops.length;
+    document.getElementById('routing-empty').style.display  = 'none';
+    document.getElementById('routing-result').style.display = 'block';
+}
+
+function renderSummary(d) {
+    const p = d.part || {};
+    set('s-name', p.name);
+    set('s-num',  p.number);
+    set('s-mat',  p.material);
+    set('s-dims', p.overall_dimensions);
+    set('s-fin',  p.surface_finish);
+    set('s-qty',  String(p.quantity ?? 1));
+    set('s-type', capitalize(d.part_type || ''));
+
+    const cx = d.complexity || 'medium';
+    document.getElementById('s-complexity').innerHTML =
+        `<span class="badge badge-${cx}">${capitalize(cx.replace('_',' '))}</span>`;
+
+    const pct = d.confidence_percent || 0;
+    document.getElementById('s-conf-pct').textContent  = pct + '%';
+    document.getElementById('s-conf-fill').style.width = pct + '%';
+    document.getElementById('s-conf-fill').style.background =
+        pct >= 80 ? '#3fb950' : pct >= 60 ? '#d29922' : '#f85149';
+
+    document.getElementById('summary-empty').style.display  = 'none';
+    document.getElementById('summary-result').style.display = 'block';
+}
+
+function renderFeatures(features) {
+    document.getElementById('feat-count').textContent = features.length;
+
+    const list = document.getElementById('features-list');
+    list.innerHTML = '';
+
+    features.forEach(f => {
+        const col = featureColor(f.type);
+        const div = document.createElement('div');
+        div.className = 'feature-card';
+        div.innerHTML = `
+            <div class="feature-head">
+                <span class="feat-type" style="background:${col}18;color:${col};border:1px solid ${col}38">${f.type || 'feature'}</span>
+                <span class="feat-id">${f.id || ''}</span>
+                ${(f.quantity || 1) > 1 ? `<span class="feat-qty">×${f.quantity}</span>` : ''}
+            </div>
+            <div class="feat-desc">${f.description || ''}</div>
+            <div class="feat-meta">
+                ${f.dimensions || ''}
+                ${f.tolerance ? `<span class="feat-tol">Tol: ${f.tolerance}</span>` : ''}
+            </div>`;
+        list.appendChild(div);
+    });
+
+    document.getElementById('features-empty').style.display  = features.length ? 'none' : 'flex';
+    document.getElementById('features-result').style.display = features.length ? 'block' : 'none';
+}
+
+function renderNotes(d) {
+    const reqs  = d.special_requirements || [];
+    const notes = document.getElementById('notes-list');
+    notes.innerHTML = '';
+
+    reqs.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'note-card';
+        div.innerHTML = `<span class="note-icon">⚠</span><span>${r}</span>`;
+        notes.appendChild(div);
+    });
+
+    if (d.analysis_notes) {
+        document.getElementById('analyst-box').style.display = 'block';
+        document.getElementById('analyst-text').textContent  = d.analysis_notes;
+    }
+
+    const has = reqs.length > 0 || d.analysis_notes;
+    document.getElementById('notes-empty').style.display  = has ? 'none' : 'flex';
+    document.getElementById('notes-result').style.display = has ? 'block' : 'none';
+}
+
+function renderError(msg) {
+    document.getElementById('routing-empty').style.display  = 'none';
+    document.getElementById('routing-result').style.display = 'block';
+    const box = document.getElementById('error-box');
+    box.textContent = '⚠ ' + msg;
+    box.classList.add('show');
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('pane-' + btn.dataset.tab).classList.add('active');
+    });
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function showLoading(show) {
+    document.getElementById('loading').classList.toggle('show', show);
+}
+
+function setLoadingLabel(txt) {
+    document.getElementById('loading-label').textContent = txt;
+}
+
+function resetResults() {
+    document.getElementById('error-box').classList.remove('show');
+    document.getElementById('routing-empty').style.display  = 'flex';
+    document.getElementById('routing-result').style.display = 'none';
+    document.getElementById('summary-empty').style.display  = 'flex';
+    document.getElementById('summary-result').style.display = 'none';
+    document.getElementById('features-empty').style.display = 'flex';
+    document.getElementById('features-result').style.display = 'none';
+    document.getElementById('notes-empty').style.display    = 'flex';
+    document.getElementById('notes-result').style.display   = 'none';
+    document.getElementById('actions-bar').classList.remove('show');
+    document.getElementById('feat-count').textContent = '0';
+    document.getElementById('analyst-box').style.display = 'none';
+}
+
+function set(id, val) {
+    document.getElementById(id).textContent = val || '—';
+}
+
+function capitalize(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+function fmtSize(b) {
+    if (b < 1024)      return b + ' B';
+    if (b < 1048576)   return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+}
+
+function machineStyle(type) {
+    const m = {
+        'Saw':             { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
+        'Lathe':           { color: '#60a5fa', bg: 'rgba(96,165,250,0.1)'  },
+        'Mill':            { color: '#34d399', bg: 'rgba(52,211,153,0.1)'  },
+        'Drill':           { color: '#fbbf24', bg: 'rgba(251,191,36,0.1)'  },
+        'Grinder':         { color: '#a78bfa', bg: 'rgba(167,139,250,0.1)' },
+        'EDM':             { color: '#f472b6', bg: 'rgba(244,114,182,0.1)' },
+        'Weld':            { color: '#fb923c', bg: 'rgba(251,146,60,0.1)'  },
+        'Heat Treat':      { color: '#f87171', bg: 'rgba(248,113,113,0.1)' },
+        'Outside Process': { color: '#fb923c', bg: 'rgba(251,146,60,0.1)'  },
+        'Inspect':         { color: '#22d3ee', bg: 'rgba(34,211,238,0.1)'  },
+        'Bench':           { color: '#a3e635', bg: 'rgba(163,230,53,0.1)'  },
+    };
+    return m[type] || { color: '#8b949e', bg: 'rgba(139,148,158,0.1)' };
+}
+
+function featureColor(type) {
+    const m = {
+        hole: '#fbbf24', bore: '#60a5fa', pocket: '#34d399', slot: '#2dd4bf',
+        thread: '#f472b6', OD: '#a78bfa', ID: '#818cf8', face: '#94a3b8',
+        contour: '#fb923c', keyway: '#f87171', chamfer: '#8b949e',
+        fillet: '#a3e635', groove: '#22d3ee', tab: '#34d399', rib: '#fb923c',
+        spline: '#e879f9', knurl: '#6b7280',
+    };
+    return m[type] || '#8b949e';
+}
+
+function exportJSON() {
+    if (!lastResult) return;
+    const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'routing-sheet.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+</script>
+</body>
+</html>
