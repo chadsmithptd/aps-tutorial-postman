@@ -126,6 +126,9 @@
     .btn-primary { background: var(--accent); color: #071020; }
     .btn-primary:hover { background: var(--accent2); }
     .btn-primary:disabled { background: #2a3a4a; color: var(--muted); cursor: not-allowed; }
+    .src-tab { background: transparent; color: var(--muted); font-weight: 500; padding: 6px; font-size: 12px; border: none; cursor: pointer; transition: background 0.15s, color 0.15s; }
+    .src-tab.active { background: var(--border); color: var(--accent); }
+    .src-tab:hover:not(.active) { background: #0a1628; }
     .btn-ghost {
       background: transparent;
       border: 1px solid var(--border);
@@ -343,15 +346,36 @@
     <!-- Upload -->
     <div class="section">
       <div class="section-title">Blueprint Image</div>
-      <div class="upload-area" id="upload-area">
-        <div id="upload-placeholder">
-          <div class="upload-icon">📐</div>
-          <div style="font-size:13px;">Drop image or click to upload</div>
-          <div class="upload-hint">Freehand sketch, photo, or scan</div>
-        </div>
-        <img id="preview-img" style="display:none;" alt="blueprint preview" />
+
+      <!-- Source toggle -->
+      <div style="display:flex; gap:0; margin-bottom:10px; border:1px solid var(--border); border-radius:4px; overflow:hidden;">
+        <button class="src-tab active" data-src="upload" style="flex:1; border-radius:0; margin:0;">Upload</button>
+        <button class="src-tab" data-src="url" style="flex:1; border-radius:0; margin:0; border-left:1px solid var(--border);">URL</button>
       </div>
-      <input type="file" id="file-input" accept="image/*" style="display:none;" />
+
+      <!-- Upload panel -->
+      <div id="src-upload">
+        <div class="upload-area" id="upload-area">
+          <div id="upload-placeholder">
+            <div class="upload-icon">📐</div>
+            <div style="font-size:13px;">Drop image or click to upload</div>
+            <div class="upload-hint">Freehand sketch, photo, or scan</div>
+          </div>
+          <img id="preview-img" style="display:none;" alt="blueprint preview" />
+        </div>
+        <input type="file" id="file-input" accept="image/*" style="display:none;" />
+      </div>
+
+      <!-- URL panel -->
+      <div id="src-url" style="display:none;">
+        <input type="text" id="image-url" placeholder="https://example.com/sketch.jpg" />
+        <div style="margin-top:8px; overflow:hidden; border-radius:4px; min-height:60px; background:#0a1628; display:flex; align-items:center; justify-content:center;">
+          <img id="url-preview" style="display:none; max-width:100%; max-height:130px; object-fit:contain; border-radius:4px;" alt="url preview" />
+          <span id="url-preview-hint" style="font-size:11px; color:var(--muted);">Preview will appear here</span>
+        </div>
+        <div class="msg" id="url-msg"></div>
+      </div>
+
       <button class="btn btn-primary" id="analyze-btn" style="margin-top:10px;" disabled>
         Analyze Blueprint
       </button>
@@ -495,7 +519,9 @@ new ResizeObserver(resize).observe(viewport);
 // ════════════════════════════════════════════════
 let currentModel    = null;
 let currentSchema   = null;
-let imageBase64     = null;
+let imageBase64     = null;   // set when upload mode is used
+let imageUrl        = null;   // set when url mode is used
+let inputMode       = 'upload'; // 'upload' | 'url'
 let wireframeOn     = false;
 
 // ════════════════════════════════════════════════
@@ -832,19 +858,26 @@ Rules:
 
 async function analyzeBlueprint() {
   const key = document.getElementById('api-key').value.trim();
-  if (!key)          { showAnalyzeMsg('Please enter your API key.', 'error'); return; }
-  if (!imageBase64)  { showAnalyzeMsg('Please upload an image first.', 'error'); return; }
+  if (!key) { showAnalyzeMsg('Please enter your API key.', 'error'); return; }
+
+  // Build image content block based on input mode
+  let imageBlock;
+  if (inputMode === 'url') {
+    if (!imageUrl) { showAnalyzeMsg('Please enter an image URL.', 'error'); return; }
+    imageBlock = { type: 'image', source: { type: 'url', url: imageUrl } };
+  } else {
+    if (!imageBase64) { showAnalyzeMsg('Please upload an image first.', 'error'); return; }
+    const comma    = imageBase64.indexOf(',');
+    const meta     = imageBase64.substring(0, comma);
+    const b64data  = imageBase64.substring(comma + 1);
+    const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+    imageBlock = { type: 'image', source: { type: 'base64', media_type: mimeType, data: b64data } };
+  }
 
   showLoading(true, 'Analyzing blueprint with Claude Vision...');
   showAnalyzeMsg('', '');
 
   try {
-    // Extract mime type and base64 data from data URL
-    const comma    = imageBase64.indexOf(',');
-    const meta     = imageBase64.substring(0, comma);          // e.g. "data:image/png;base64"
-    const b64data  = imageBase64.substring(comma + 1);
-    const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
-
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -860,8 +893,8 @@ async function analyzeBlueprint() {
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: mimeType, data: b64data } },
-            { type: 'text',  text: 'Analyze this blueprint sketch and return the JSON.' }
+            imageBlock,
+            { type: 'text', text: 'Analyze this blueprint sketch and return the JSON.' }
           ]
         }]
       })
@@ -965,6 +998,53 @@ function loadFile(file) {
 }
 
 analyzeBtn.addEventListener('click', analyzeBlueprint);
+
+// ── Source toggle (Upload / URL) ───────────────────────────────────────
+document.querySelectorAll('.src-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.src-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    inputMode = tab.dataset.src;
+    document.getElementById('src-upload').style.display = inputMode === 'upload' ? 'block' : 'none';
+    document.getElementById('src-url').style.display    = inputMode === 'url'    ? 'block' : 'none';
+    // Re-evaluate analyze button state
+    analyzeBtn.disabled = inputMode === 'upload' ? !imageBase64 : !imageUrl;
+  });
+});
+
+// ── URL input ─────────────────────────────────────────────────────────
+const imageUrlInput  = document.getElementById('image-url');
+const urlPreview     = document.getElementById('url-preview');
+const urlPreviewHint = document.getElementById('url-preview-hint');
+const urlMsg         = document.getElementById('url-msg');
+
+imageUrlInput.addEventListener('input', () => {
+  const val = imageUrlInput.value.trim();
+  imageUrl = null;
+  analyzeBtn.disabled = true;
+  urlMsg.textContent  = '';
+  urlPreview.style.display     = 'none';
+  urlPreviewHint.style.display = 'inline';
+
+  if (!val) return;
+
+  // Optimistically show preview; validate on load
+  urlPreview.src = val;
+  urlPreview.onload = () => {
+    imageUrl = val;
+    urlPreview.style.display     = 'block';
+    urlPreviewHint.style.display = 'none';
+    analyzeBtn.disabled = false;
+    urlMsg.textContent  = '';
+    urlMsg.className    = 'msg';
+  };
+  urlPreview.onerror = () => {
+    urlPreview.style.display     = 'none';
+    urlPreviewHint.style.display = 'inline';
+    urlMsg.textContent = 'Could not load image — check the URL and make sure it is publicly accessible.';
+    urlMsg.className   = 'msg error';
+  };
+});
 
 // ════════════════════════════════════════════════
 // Tabs
