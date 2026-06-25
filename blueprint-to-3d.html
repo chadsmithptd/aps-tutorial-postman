@@ -573,34 +573,29 @@ async function schemaToGroup(schema) {
   if (!Array.isArray(seq) || seq.length === 0) return group;
 
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x7eb8d4,
-    metalness: 0.75,
-    roughness: 0.2,
+    color: 0x7eb8d4, metalness: 0.75, roughness: 0.2,
   });
 
-  // Lazy-load CSG library — if it fails, fall back to a simple solid so the UI stays functional
+  // Lazy-load CSG — if it fails the UI still works
   let Brush, Evaluator, SUBTRACTION, ADDITION;
   try {
-    const csg = await import('three-bvh-csg');
-    Brush      = csg.Brush;
-    Evaluator  = csg.Evaluator;
-    SUBTRACTION = csg.SUBTRACTION;
-    ADDITION    = csg.ADDITION;
+    const csg   = await import('three-bvh-csg');
+    Brush        = csg.Brush;
+    Evaluator    = csg.Evaluator;
+    SUBTRACTION  = csg.SUBTRACTION;
+    ADDITION     = csg.ADDITION;
   } catch (e) {
-    console.warn('CSG library unavailable, rendering base shape only:', e.message);
-    // Minimal fallback: just render the first base shape
+    console.warn('CSG unavailable, rendering base shape only:', e.message);
     for (const step of seq) {
       if ((step.operation || '').startsWith('base_')) {
         const isCyl = step.diameter || (step.shape || '').includes('cyl');
-        let geo;
-        if (isCyl) {
-          const r = step.diameter ? step.diameter / 2 : 25;
-          const h = step.height || step.length || 50;
-          geo = new THREE.CylinderGeometry(r, r, h, 64);
-        } else {
-          geo = new THREE.BoxGeometry(step.width || 50, step.height || 50, step.length || step.depth || 50);
-        }
+        const h = step.height || step.length || 50;
+        const r = step.diameter ? step.diameter / 2 : 25;
+        const geo = isCyl
+          ? new THREE.CylinderGeometry(r, r, h, 64)
+          : new THREE.BoxGeometry(step.width || 50, h, step.length || step.depth || 50);
         const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.y = h / 2;   // bottom at y=0
         mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'base';
         group.add(mesh);
         break;
@@ -613,111 +608,116 @@ async function schemaToGroup(schema) {
   evaluator.useGroups = false;
 
   let solidBrush = null;
-  let baseHeight = 50;
-  let baseRadius = 25;
+  let baseH = 50;
+  let baseR = 25;
 
-  function csgOp(a, b, operation) {
+  // Place a brush with its BOTTOM at y=zBottom, extending h units upward.
+  // Direct equivalent of: cq.Workplane("XY", origin=(0,0,zBottom)).extrude(h)
+  function brushAt(geo, zBottom, h) {
+    const b = new Brush(geo, mat);
+    b.position.y = zBottom + h / 2;
+    b.updateMatrixWorld(true);
+    return b;
+  }
+
+  function csgOp(a, b, op) {
     b.updateMatrixWorld(true);
     const target = new Brush();
-    evaluator.evaluate(a, b, operation, target);
+    evaluator.evaluate(a, b, op, target);
     target.material = mat;
     target.updateMatrixWorld(true);
     return target;
   }
 
-  function yCenter(pos, len) {
-    if (pos === 'top')    return  baseHeight / 2 - len / 2;
-    if (pos === 'bottom') return -baseHeight / 2 + len / 2;
-    return 0;
+  // Mirrors the zStart / zOrigin logic in schemaToCadQuery() exactly.
+  function zStart(pos, len) {
+    if (pos === 'top')    return baseH - len;
+    if (pos === 'bottom') return 0;
+    return (baseH - len) / 2;   // 'along_length' / 'middle'
   }
 
   for (const step of seq) {
     const op = (step.operation || '').toLowerCase();
 
-    // ── Base solid ─────────────────────────────────────────────────
+    // ── Base solid — bottom at Y=0, top at Y=baseH ────────────────────
     if (op.startsWith('base_')) {
-      const shape = (step.shape || '').toLowerCase();
-      const isCyl = shape === 'cylinder' || (step.diameter && !shape.includes('rect'));
-      let geo;
+      const isCyl = step.diameter || (step.shape || '').includes('cyl');
       if (isCyl) {
-        baseRadius = step.diameter ? step.diameter / 2 : 25;
-        baseHeight = step.height || step.length || 50;
-        geo = new THREE.CylinderGeometry(baseRadius, baseRadius, baseHeight, 72);
+        baseR = step.diameter ? step.diameter / 2 : 25;
+        baseH = step.height || step.length || 50;
+        solidBrush = brushAt(new THREE.CylinderGeometry(baseR, baseR, baseH, 72), 0, baseH);
       } else {
         const w = step.width || 50;
-        baseHeight = step.height || 50;
         const d = step.length || step.depth || 50;
-        geo = new THREE.BoxGeometry(w, baseHeight, d);
+        baseH = step.height || 50;
+        solidBrush = brushAt(new THREE.BoxGeometry(w, baseH, d), 0, baseH);
       }
-      solidBrush = new Brush(geo, mat);
-      solidBrush.updateMatrixWorld(true);
 
     } else if (!solidBrush) {
       continue;
 
-    // ── Union: flange / boss / added feature ───────────────────────
+    // ── Flange / boss — same zOrigin as schemaToCadQuery ──────────────
     } else if (op === 'add_flange' || op === 'add_boss' || op === 'add_feature') {
-      const r = step.diameter ? step.diameter / 2 : baseRadius * 1.8;
-      const h = step.thickness || 8;
+      const r  = step.diameter ? step.diameter / 2 : +(baseR * 1.8).toFixed(2);
+      const h  = step.thickness || 8;
       const pos = (step.position || 'bottom').toLowerCase();
-      const b = new Brush(new THREE.CylinderGeometry(r, r, h, 64), mat);
-      if (pos === 'top')         b.position.y =  baseHeight / 2 + h / 2;
-      else if (pos === 'bottom') b.position.y = -baseHeight / 2 - h / 2;
-      solidBrush = csgOp(solidBrush, b, ADDITION);
+      const zO  = pos === 'top' ? baseH : pos === 'bottom' ? -h : (baseH - h) / 2;
+      solidBrush = csgOp(solidBrush,
+        brushAt(new THREE.CylinderGeometry(r, r, h, 64), zO, h),
+        ADDITION);
 
-    // ── Step: remove section, add stepped-down cylinder ────────────
+    // ── Step — zStart mirrors schemaToCadQuery exactly ────────────────
     } else if (op === 'cut_step') {
-      const newR = step.diameter ? step.diameter / 2 : baseRadius * 0.65;
+      const newR = step.diameter ? step.diameter / 2 : +(baseR * 0.65).toFixed(2);
       const len  = step.depth || 25;
       const pos  = (step.position || 'top').toLowerCase();
-      const yc   = yCenter(pos, len);
+      const zO   = zStart(pos, len);
 
-      // Remove full section at that position
-      const rem = new Brush(
-        new THREE.CylinderGeometry(baseRadius + 10, baseRadius + 10, len + 0.2, 64), mat
-      );
-      rem.position.y = yc;
-      solidBrush = csgOp(solidBrush, rem, SUBTRACTION);
+      solidBrush = csgOp(solidBrush,
+        brushAt(new THREE.CylinderGeometry(baseR + 10, baseR + 10, len + 0.2, 64), zO, len + 0.2),
+        SUBTRACTION);
+      solidBrush = csgOp(solidBrush,
+        brushAt(new THREE.CylinderGeometry(newR, newR, len, 64), zO, len),
+        ADDITION);
 
-      // Add back the smaller-diameter section
-      const add = new Brush(new THREE.CylinderGeometry(newR, newR, len, 64), mat);
-      add.position.y = yc;
-      solidBrush = csgOp(solidBrush, add, ADDITION);
-
-    // ── Bore / hole: subtract cylinder ────────────────────────────
+    // ── Bore — matches cq.faces(">Z").cutThruAll() / cutBlind() ───────
     } else if (op === 'cut_hole') {
       const r     = step.diameter ? step.diameter / 2 : 8;
-      const depth = step.through ? baseHeight + 400 : (step.depth || baseHeight);
-      const pos   = (step.position || 'along_length').toLowerCase();
-      const b = new Brush(new THREE.CylinderGeometry(r, r, depth + 2, 48), mat);
-      if (pos === 'top')         b.position.y =  baseHeight / 2;
-      else if (pos === 'bottom') b.position.y = -baseHeight / 2;
-      // 'along_length' / 'center' → y=0, axial bore
-      solidBrush = csgOp(solidBrush, b, SUBTRACTION);
+      const depth = step.through ? baseH + 400 : (step.depth || baseH);
+      // Through: tool placed so it starts below y=0 and exits above y=baseH
+      // Blind: tool placed from top face downward
+      const zTool = step.through ? -1 : baseH - depth;
+      solidBrush = csgOp(solidBrush,
+        brushAt(new THREE.CylinderGeometry(r, r, depth + 2, 48), zTool, depth + 2),
+        SUBTRACTION);
 
-    // ── Flats: subtract material outside the across-flats boundary ──
+    // ── Flats — zStart mirrors schemaToCadQuery ───────────────────────
     } else if (op === 'cut_flats') {
-      const af      = step.across_flats || baseRadius * 1.5;
-      const flatLen = step.depth || baseHeight;
+      const af      = step.across_flats || +(baseR * 1.5).toFixed(2);
+      const flatLen = step.depth || baseH;
       const pos     = (step.position || 'along_length').toLowerCase();
-      const yc      = yCenter(pos, flatLen);
+      const zO      = zStart(pos, flatLen);
+      const half    = af / 2;
       const big     = 2000;
 
-      for (const side of [-1, 1]) {
+      for (const sign of [-1, 1]) {
         const b = new Brush(new THREE.BoxGeometry(big, flatLen + 0.2, big), mat);
-        b.position.set(side * (af / 2 + big / 2), yc, 0);
+        b.position.set(sign * (half + big / 2), zO + (flatLen + 0.2) / 2, 0);
+        b.updateMatrixWorld(true);
         solidBrush = csgOp(solidBrush, b, SUBTRACTION);
       }
 
-    // ── Profile cut: subtract a box ───────────────────────────────
+    // ── Profile cut ───────────────────────────────────────────────────
     } else if (op === 'cut_profile') {
-      const w = step.width  || baseRadius;
-      const h = step.height || baseHeight;
+      const w = step.width  || baseR;
+      const h = step.height || baseH;
       const d = step.depth  || 10;
       const b = new Brush(new THREE.BoxGeometry(w, h, d), mat);
+      b.position.y = baseH / 2;
+      b.updateMatrixWorld(true);
       solidBrush = csgOp(solidBrush, b, SUBTRACTION);
     }
-    // fillet / chamfer: not representable with simple geometry — params panel only
+    // fillet / chamfer: no geometry equivalent — shown in params panel only
   }
 
   if (solidBrush) {
@@ -727,6 +727,8 @@ async function schemaToGroup(schema) {
     solidBrush.name = 'base';
     group.add(solidBrush);
   }
+  return group;
+}
   return group;
 }
 
