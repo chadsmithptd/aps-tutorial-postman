@@ -1371,16 +1371,114 @@ document.getElementById('btn-front').addEventListener('click', () => snapCamera(
 document.getElementById('btn-side').addEventListener('click',  () => snapCamera(new THREE.Vector3(1, 0, 0)));
 document.getElementById('btn-iso').addEventListener('click',   () => snapCamera(new THREE.Vector3(1, 0.7, 1)));
 
-// ── GLB Export ───────────────────────────────────────
+// ── GLB Export — face-segmented ──────────────────────
+// Buckets each triangle into a logical face group, then exports as
+// one named mesh per group so importers (Blender, etc.) see individual faces.
+function buildSegmentedExportGroup(srcMesh) {
+  const geo = srcMesh.geometry;
+  if (!geo.attributes.normal) geo.computeVertexNormals();
+
+  const pos = geo.attributes.position;
+  const nor = geo.attributes.normal;
+  const idx = geo.index;
+  const totalFaces = idx ? idx.count / 3 : pos.count / 3;
+  function vtx(fi, vi) { return idx ? idx.getX(fi * 3 + vi) : fi * 3 + vi; }
+
+  const buckets = new Map();
+  const fN = new THREE.Vector3(), fP = new THREE.Vector3();
+
+  for (let i = 0; i < totalFaces; i++) {
+    fN.set(0,0,0); fP.set(0,0,0);
+    for (let v = 0; v < 3; v++) {
+      const b = vtx(i, v);
+      fN.add(new THREE.Vector3(nor.getX(b), nor.getY(b), nor.getZ(b)));
+      fP.add(new THREE.Vector3(pos.getX(b), pos.getY(b), pos.getZ(b)));
+    }
+    fN.divideScalar(3).normalize();
+    fP.divideScalar(3);
+
+    let key;
+    if (Math.abs(fN.y) < 0.15) {
+      // Radial / cylindrical surface — group by distance from Y-axis (= radius)
+      const r = Math.round(Math.sqrt(fP.x * fP.x + fP.z * fP.z) * 4) / 4;
+      key = `cyl_r${r}`;
+    } else {
+      // Flat / sloped face — group by quantized normal + plane distance
+      const nx = Math.round(fN.x * 10) / 10;
+      const ny = Math.round(fN.y * 10) / 10;
+      const nz = Math.round(fN.z * 10) / 10;
+      const d  = Math.round(fN.dot(fP) * 4) / 4;
+      key = `flat_${nx}_${ny}_${nz}_${d}`;
+    }
+
+    if (!buckets.has(key)) buckets.set(key, { faces: [], avgN: fN.clone(), key });
+    buckets.get(key).faces.push(i);
+  }
+
+  const exportGroup = new THREE.Group();
+  exportGroup.name = (currentSchema?.part_type || 'part').replace(/[^a-z0-9]/gi, '_');
+
+  const expMat = new THREE.MeshStandardMaterial({ color: 0x7eb8d4, metalness: 0.75, roughness: 0.2 });
+  srcMesh.updateWorldMatrix(true, false);
+  const wm  = srcMesh.matrixWorld;
+  const wv  = new THREE.Vector3();
+
+  // Track used names so duplicates get a numeric suffix
+  const nameCount = new Map();
+  function uniqueName(base) {
+    const n = (nameCount.get(base) || 0) + 1;
+    nameCount.set(base, n);
+    return n === 1 ? base : `${base}_${n}`;
+  }
+
+  for (const { faces, avgN, key } of buckets.values()) {
+    const arr = new Float32Array(faces.length * 9);
+    let off = 0;
+    for (const fi of faces) {
+      for (let v = 0; v < 3; v++) {
+        const b = vtx(fi, v);
+        wv.set(pos.getX(b), pos.getY(b), pos.getZ(b)).applyMatrix4(wm);
+        arr[off++] = wv.x; arr[off++] = wv.y; arr[off++] = wv.z;
+      }
+    }
+    const fGeo = new THREE.BufferGeometry();
+    fGeo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    fGeo.computeVertexNormals();
+
+    let baseName;
+    if (key.startsWith('cyl_')) {
+      baseName = `surface_${key.slice(4)}`;   // e.g. surface_r9.5
+    } else {
+      const ax = Math.abs(avgN.x), ay = Math.abs(avgN.y), az = Math.abs(avgN.z);
+      if (ay > 0.85)      baseName = avgN.y > 0 ? 'face_top'       : 'face_bottom';
+      else if (ax > 0.85) baseName = avgN.x > 0 ? 'flat_pos_x'     : 'flat_neg_x';
+      else if (az > 0.85) baseName = avgN.z > 0 ? 'flat_pos_z'     : 'flat_neg_z';
+      else                baseName = 'face_angled';
+    }
+
+    const m = new THREE.Mesh(fGeo, expMat);
+    m.name = uniqueName(baseName);
+    exportGroup.add(m);
+  }
+
+  return exportGroup;
+}
+
 const glbBtn = document.getElementById('btn-glb');
 glbBtn.addEventListener('click', () => {
   if (!currentModel) return;
   const name = (currentSchema?.part_type || 'part').replace(/\s+/g, '_');
   glbBtn.disabled = true;
   glbBtn.textContent = '⏳ Exporting…';
+
+  // Find the CSG result mesh and segment it into per-face submeshes
+  let srcMesh = null;
+  currentModel.traverse(o => { if (o.isMesh && o.name === 'base') srcMesh = o; });
+  const exportTarget = srcMesh ? buildSegmentedExportGroup(srcMesh) : currentModel;
+
   const exporter = new GLTFExporter();
   exporter.parse(
-    currentModel,
+    exportTarget,
     (buffer) => {
       const blob = new Blob([buffer], { type: 'application/octet-stream' });
       const a = document.createElement('a');
