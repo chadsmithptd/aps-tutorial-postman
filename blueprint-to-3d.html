@@ -381,6 +381,14 @@
       <div class="msg" id="analyze-msg"></div>
     </div>
 
+    <!-- User description (optional) -->
+    <div class="section">
+      <div class="section-title">Description / Instructions <span style="color:var(--muted);font-weight:400;">(optional)</span></div>
+      <textarea id="user-input" rows="3"
+        placeholder="e.g. flanged bushing, 30mm bore, 60mm flange OD, 80mm total length"
+        style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 9px;font-size:12px;resize:vertical;font-family:inherit;"></textarea>
+    </div>
+
     <!-- Tabs -->
     <div class="tabs">
       <div class="tab active" data-tab="params">Parameters</div>
@@ -538,123 +546,107 @@ function makeMat(opts = {}) {
 }
 
 // ════════════════════════════════════════════════
-// Schema → Three.js geometry
+// Schema → Three.js geometry (build_sequence format)
 // ════════════════════════════════════════════════
 function schemaToGroup(schema) {
   const group = new THREE.Group();
-  const { base, operations = [], units = 'mm' } = schema;
-  const s = units === 'in' ? 25.4 : 1;  // normalise to mm
+  const seq = schema.build_sequence;
+  if (!Array.isArray(seq) || seq.length === 0) return group;
 
-  // ── Base shape ──────────────────────────────
-  let baseGeo;
-  const p = base.parameters;
-
-  switch (base.type) {
-    case 'box':
-      baseGeo = new THREE.BoxGeometry(
-        (p.width  || 100) * s,
-        (p.height || 50)  * s,
-        (p.depth  || 10)  * s
-      );
-      break;
-    case 'cylinder':
-      baseGeo = new THREE.CylinderGeometry(
-        (p.radius || 30) * s,
-        (p.radius || 30) * s,
-        (p.height || 60) * s,
-        72
-      );
-      break;
-    case 'sphere':
-      baseGeo = new THREE.SphereGeometry((p.radius || 30) * s, 72, 36);
-      break;
-    case 'cone':
-      baseGeo = new THREE.CylinderGeometry(
-        (p.radius2 || 5)  * s,
-        (p.radius1 || 30) * s,
-        (p.height  || 60) * s,
-        72
-      );
-      break;
-    case 'torus':
-      baseGeo = new THREE.TorusGeometry(
-        (p.radius || 40)  * s,
-        (p.tube   || 10)  * s,
-        32, 100
-      );
-      break;
-    default:
-      baseGeo = new THREE.BoxGeometry(100 * s, 50 * s, 10 * s);
-  }
-
-  const baseMesh = new THREE.Mesh(baseGeo, makeMat());
-  baseMesh.castShadow = true;
-  baseMesh.receiveShadow = true;
-  baseMesh.name = 'base';
-  group.add(baseMesh);
-
-  // Bounding box of base (used to position operations)
-  const bbox = new THREE.Box3().setFromObject(baseMesh);
-  const bsize = new THREE.Vector3();
-  bbox.getSize(bsize);
-
-  // ── Operations ──────────────────────────────
-  // Holes and pockets are visualised as outlined meshes (red = hole, dark = pocket)
-  // Fillets/chamfers shown as info only (no geometry change)
-  const holeMat = new THREE.MeshBasicMaterial({
-    color: 0xff4444,
-    wireframe: true,
-    transparent: true,
-    opacity: 0.75,
+  const addMat = makeMat({ color: 0x2e86ab });
+  const cutMat = new THREE.MeshBasicMaterial({
+    color: 0xff4444, wireframe: true, transparent: true, opacity: 0.75,
   });
-  const pocketMat = makeMat({ color: 0x0a1e38, opacity: 0.9, transparent: true });
+  const flatMat = new THREE.MeshBasicMaterial({
+    color: 0xff9800, wireframe: true, transparent: true, opacity: 0.65,
+  });
 
-  operations.forEach(op => {
-    const q = op.parameters || {};
+  let baseHeight = 50;
+  let baseRadius = 25;
+  let baseIsBox  = false;
+  let baseWidth  = 50, baseDepth = 50;
 
-    if (op.type === 'hole') {
-      const dia  = (q.diameter || 10) * s;
-      const dep  = (q.depth || bsize.y) * s;
-      const px   = (q.position?.x || 0) * s;
-      const py   = (q.position?.y || 0) * s;
-      const face = q.face || 'top';
+  for (const step of seq) {
+    const op = (step.operation || '').toLowerCase();
 
-      const hGeo  = new THREE.CylinderGeometry(dia / 2, dia / 2, dep, 48);
-      const hMesh = new THREE.Mesh(hGeo, holeMat);
-
-      if (face === 'top') {
-        hMesh.position.set(px, bbox.max.y - dep / 2, py);
-      } else if (face === 'bottom') {
-        hMesh.position.set(px, bbox.min.y + dep / 2, py);
-      } else if (face === 'front') {
-        hMesh.rotation.x = Math.PI / 2;
-        hMesh.position.set(px, py, bbox.max.z - dep / 2);
-      } else if (face === 'back') {
-        hMesh.rotation.x = Math.PI / 2;
-        hMesh.position.set(px, py, bbox.min.z + dep / 2);
-      } else if (face === 'right') {
-        hMesh.rotation.z = Math.PI / 2;
-        hMesh.position.set(bbox.max.x - dep / 2, py, px);
-      } else if (face === 'left') {
-        hMesh.rotation.z = Math.PI / 2;
-        hMesh.position.set(bbox.min.x + dep / 2, py, px);
+    // ── Base body ──────────────────────────────
+    if (op.startsWith('base_')) {
+      const shape = (step.shape || '').toLowerCase();
+      const isCyl = shape === 'cylinder' || (step.diameter && !shape.includes('rect'));
+      let geo;
+      if (isCyl) {
+        const r = (step.diameter ? step.diameter / 2 : 25);
+        const h = (step.height || step.length || 50);
+        baseRadius = r; baseHeight = h;
+        geo = new THREE.CylinderGeometry(r, r, h, 64);
+      } else {
+        const w = step.width || 50;
+        const h = step.height || 50;
+        const d = step.length || step.depth || 50;
+        baseWidth = w; baseHeight = h; baseDepth = d;
+        baseIsBox = true;
+        geo = new THREE.BoxGeometry(w, h, d);
       }
-      group.add(hMesh);
+      const mesh = new THREE.Mesh(geo, makeMat());
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.name = 'base';
+      group.add(mesh);
 
-    } else if (op.type === 'pocket') {
-      const pw   = (q.width  || 20) * s;
-      const ph   = (q.height || 20) * s;
-      const dep  = (q.depth  ||  5) * s;
-      const px   = (q.position?.x || 0) * s;
-      const py   = (q.position?.y || 0) * s;
+    // ── Additive features (flanges, bosses) ────
+    } else if (op === 'add_flange' || op === 'add_boss' || op === 'add_feature') {
+      const r   = step.diameter ? step.diameter / 2 : baseRadius * 1.8;
+      const h   = step.thickness || 8;
+      const pos = (step.position || 'bottom').toLowerCase();
+      const geo = new THREE.CylinderGeometry(r, r, h, 64);
+      const mesh = new THREE.Mesh(geo, addMat);
+      mesh.castShadow = true;
+      mesh.name = op;
+      if (pos === 'top')         mesh.position.y =  baseHeight / 2 + h / 2;
+      else if (pos === 'bottom') mesh.position.y = -baseHeight / 2 - h / 2;
+      group.add(mesh);
 
-      const pGeo  = new THREE.BoxGeometry(pw, dep, ph);
-      const pMesh = new THREE.Mesh(pGeo, pocketMat);
-      pMesh.position.set(px, bbox.max.y - dep / 2, py);
-      group.add(pMesh);
+    // ── Step cut: show stepped-down section ────
+    } else if (op === 'cut_step') {
+      const newR = step.diameter ? step.diameter / 2 : baseRadius * 0.65;
+      const len  = step.depth || 25;
+      const pos  = (step.position || 'top').toLowerCase();
+      const geo  = new THREE.CylinderGeometry(newR, newR, len, 64);
+      const mesh = new THREE.Mesh(geo, addMat);
+      mesh.castShadow = true;
+      mesh.name = 'cut_step';
+      if (pos === 'top')         mesh.position.y =  baseHeight / 2 + len / 2;
+      else if (pos === 'bottom') mesh.position.y = -baseHeight / 2 - len / 2;
+      group.add(mesh);
+
+    // ── Hole: red wireframe cylinder ───────────
+    } else if (op === 'cut_hole') {
+      const r     = step.diameter ? step.diameter / 2 : 8;
+      const depth = step.through ? (baseHeight + 20) : (step.depth || baseHeight);
+      const pos   = (step.position || '').toLowerCase();
+      const geo   = new THREE.CylinderGeometry(r, r, depth + 2, 32);
+      const mesh  = new THREE.Mesh(geo, cutMat);
+      if (pos === 'top')         mesh.position.y =  baseHeight / 2;
+      else if (pos === 'bottom') mesh.position.y = -baseHeight / 2;
+      // 'along_length' / 'center' → stays at 0 (axial bore)
+      group.add(mesh);
+
+    // ── Flats (hex/square): orange wireframe ───
+    } else if (op === 'cut_flats') {
+      const af  = step.across_flats || baseRadius * 1.5;
+      const len = step.depth || baseHeight;
+      const geo = new THREE.BoxGeometry(af, len, af);
+      group.add(new THREE.Mesh(geo, flatMat));
+
+    // ── Generic profile cut ────────────────────
+    } else if (op === 'cut_profile') {
+      const w = step.width || baseRadius;
+      const h = step.height || baseHeight;
+      const d = step.depth || 10;
+      group.add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cutMat));
     }
-    // fillet / chamfer: annotated in the params panel, no geometry approximation
-  });
+    // fillet / chamfer → params panel only, no geometry change
+  }
 
   return group;
 }
@@ -692,7 +684,8 @@ function renderSchema(schema) {
 
   updateParamsPanel(schema);
   document.getElementById('json-editor').value = JSON.stringify(schema, null, 2);
-  setStatus(`${schema.name || 'Part'}  |  ${schema.units || 'mm'}`, 'ok');
+  const unit = schema.parameters?.overall_length?.unit || 'mm';
+  setStatus(`${schema.part_type || 'Part'}  |  ${unit}`, 'ok');
 }
 
 function applyWireframe(on) {
@@ -711,29 +704,76 @@ function updateParamsPanel(schema) {
   panel.style.display = 'block';
   panel.innerHTML = '';
 
+  const unit = schema.parameters?.overall_length?.unit || 'mm';
+
   const nameEl = document.createElement('div');
   nameEl.className = 'part-name';
-  nameEl.textContent = schema.name || 'Part';
+  nameEl.textContent = schema.part_type || 'Part';
   panel.appendChild(nameEl);
 
   const unitsEl = document.createElement('div');
   unitsEl.className = 'part-units';
-  unitsEl.textContent = `Units: ${schema.units || 'mm'}`;
+  unitsEl.textContent = `${schema.parameters?.material || ''} · ${unit}`;
   panel.appendChild(unitsEl);
 
-  // Base parameters
-  appendOpLabel(panel, schema.base.type.toUpperCase());
-  appendParamFields(panel, schema.base.parameters, schema.units || 'mm', () => renderSchema(schema));
+  // Overall length
+  if (schema.parameters?.overall_length) {
+    appendOpLabel(panel, 'OVERALL');
+    const row = makeParamRow('overall_length', schema.parameters.overall_length.value, unit);
+    row.input.addEventListener('change', () => {
+      const v = parseFloat(row.input.value);
+      if (!isNaN(v)) { schema.parameters.overall_length.value = v; renderSchema(schema); }
+    });
+    panel.appendChild(row.el);
+  }
 
-  // Operations
-  (schema.operations || []).forEach((op, i) => {
-    appendOpLabel(panel, `${op.type.toUpperCase()} #${i + 1}`);
-    const flatParams = flattenOpParams(op.parameters);
-    appendParamFields(panel, flatParams, schema.units || 'mm', (key, val) => {
-      setNestedParam(op.parameters, key, val);
-      renderSchema(schema);
+  // Build sequence steps
+  (schema.build_sequence || []).forEach((step, i) => {
+    const label = (step.operation || `step ${i + 1}`).replace(/_/g, ' ').toUpperCase();
+    appendOpLabel(panel, label);
+    if (step.notes) {
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:10px;color:var(--muted);padding:0 0 4px 0;';
+      note.textContent = step.notes;
+      panel.appendChild(note);
+    }
+    Object.entries(step).forEach(([key, val]) => {
+      if (key === 'operation' || key === 'shape' || key === 'notes') return;
+      if (typeof val === 'number') {
+        const row = makeParamRow(key, val, unit);
+        row.input.addEventListener('change', () => {
+          const v = parseFloat(row.input.value);
+          if (!isNaN(v)) { step[key] = v; renderSchema(schema); }
+        });
+        panel.appendChild(row.el);
+      } else if (typeof val === 'boolean') {
+        const row = document.createElement('div');
+        row.className = 'param-row';
+        row.innerHTML = `<span class="param-label">${key}</span><span class="param-unit" style="color:var(--accent)">${val}</span>`;
+        panel.appendChild(row);
+      }
     });
   });
+
+  // Reasoning
+  if (schema.reasoning) {
+    appendOpLabel(panel, 'REASONING');
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:11px;color:var(--muted);padding:2px 0 6px;line-height:1.4;';
+    note.textContent = schema.reasoning;
+    panel.appendChild(note);
+  }
+
+  // Ambiguities
+  if (schema.ambiguities?.length) {
+    appendOpLabel(panel, 'AMBIGUITIES');
+    schema.ambiguities.forEach(a => {
+      const el = document.createElement('div');
+      el.style.cssText = 'font-size:11px;color:#f9a825;padding:1px 0;';
+      el.textContent = '· ' + a;
+      panel.appendChild(el);
+    });
+  }
 
   // Wireframe toggle
   const tr = document.createElement('div');
@@ -756,104 +796,84 @@ function appendOpLabel(parent, text) {
   parent.appendChild(el);
 }
 
-function flattenOpParams(params) {
-  const out = {};
-  Object.entries(params || {}).forEach(([k, v]) => {
-    if (typeof v === 'number' || typeof v === 'string') {
-      out[k] = v;
-    } else if (k === 'position' && typeof v === 'object') {
-      if (typeof v.x === 'number') out['pos.x'] = v.x;
-      if (typeof v.y === 'number') out['pos.y'] = v.y;
-    }
-  });
-  return out;
-}
-
-function setNestedParam(params, key, val) {
-  if (key.startsWith('pos.')) {
-    const axis = key.split('.')[1];
-    if (!params.position) params.position = {};
-    params.position[axis] = val;
-  } else {
-    params[key] = val;
-  }
-}
-
-function appendParamFields(parent, params, unit, onChange) {
-  Object.entries(params || {}).forEach(([key, val]) => {
-    if (typeof val === 'number') {
-      const row = document.createElement('div');
-      row.className = 'param-row';
-
-      const lbl = document.createElement('span');
-      lbl.className = 'param-label';
-      lbl.textContent = key;
-
-      const inp = document.createElement('input');
-      inp.type  = 'number';
-      inp.value = val;
-      inp.step  = 0.5;
-      inp.min   = 0.1;
-      inp.addEventListener('change', () => {
-        const v = parseFloat(inp.value);
-        if (!isNaN(v) && v > 0) {
-          if (typeof onChange === 'function') {
-            if (onChange.length >= 2) onChange(key, v);
-            else { params[key] = v; onChange(); }
-          }
-        }
-      });
-
-      const unitEl = document.createElement('span');
-      unitEl.className = 'param-unit';
-      unitEl.textContent = unit;
-
-      row.appendChild(lbl);
-      row.appendChild(inp);
-      row.appendChild(unitEl);
-      parent.appendChild(row);
-    } else if (typeof val === 'string' && key !== 'face' && key !== 'edges') {
-      // non-numeric string fields are display-only
-    }
-  });
+function makeParamRow(key, val, unit) {
+  const el = document.createElement('div');
+  el.className = 'param-row';
+  const lbl = document.createElement('span');
+  lbl.className = 'param-label';
+  lbl.textContent = key.replace(/_/g, ' ');
+  const input = document.createElement('input');
+  input.type = 'number'; input.value = val; input.step = 0.5; input.min = 0.01;
+  const unitEl = document.createElement('span');
+  unitEl.className = 'param-unit';
+  unitEl.textContent = unit;
+  el.appendChild(lbl); el.appendChild(input); el.appendChild(unitEl);
+  return { el, input };
 }
 
 // ════════════════════════════════════════════════
 // Claude API
 // ════════════════════════════════════════════════
-const SYSTEM_PROMPT = `You are an expert at interpreting amateur freehand engineering sketches and blueprints drawn by hobbyists with no formal drafting training. The sketches may be rough, unlabeled, or disproportionate.
-
-Analyze the image and produce a JSON object that exactly matches this schema:
-
+const SYSTEM_PROMPT_STATIC = `You are an expert mechanical design engineer for a precision aerospace CNC machine shop.
+Analyze the user's input (text description, hand sketch, or photo) and convert it into a clear, buildable sequence of CAD operations.
+### Rules:
+- Work from any existing parameters if provided.
+- Think in construction order (base feature first, then additions, then cuts, then finishing).
+- Be explicit about dimensions, steps, flats, shoulders, and relationships.
+- Default unit = mm unless specified.
+### Output ONLY this JSON:
 {
-  "name": "short descriptive name of the part",
-  "units": "mm",
-  "base": {
-    "type": "box | cylinder | sphere | cone | torus",
-    "parameters": {
-      (include ONLY the fields for the chosen type)
-      box      → "width": number, "height": number, "depth": number
-      cylinder → "radius": number, "height": number
-      sphere   → "radius": number
-      cone     → "radius1": number, "radius2": number, "height": number
-      torus    → "radius": number, "tube": number
+  "part_type": "flanged_bushing" | "stepped_shaft" | "disc" | "plate" | "bracket" | string,
+  "build_sequence": [
+    {
+      "operation": "base_extrusion" | "base_revolution" | "base_sketch_extrude",
+      "shape": "cylinder" | "rectangle" | "profile",
+      "diameter": number,
+      "width": number,
+      "height": number,
+      "length": number,
+      "notes": "string"
+    },
+    {
+      "operation": "add_flange" | "add_boss" | "add_feature",
+      "diameter": number,
+      "thickness": number,
+      "position": "bottom" | "top" | "middle",
+      "notes": "string"
+    },
+    {
+      "operation": "cut_hole" | "cut_step" | "cut_flats" | "cut_profile",
+      "diameter": number,
+      "across_flats": number,
+      "width": number,
+      "depth": number,
+      "through": true | false,
+      "position": "bottom" | "top" | "along_length",
+      "notes": "string"
+    },
+    {
+      "operation": "fillet" | "chamfer",
+      "radius": number,
+      "edges": "all" | "selected",
+      "notes": "string"
     }
+  ],
+  "parameters": {
+    "overall_length": {"value": number, "unit": "mm"},
+    "material": "aluminum_6061" | string
   },
-  "operations": [
-    (zero or more of:)
-    { "type": "hole",    "parameters": { "diameter": number, "depth": number, "position": {"x": number, "y": number}, "face": "top|bottom|front|back|left|right" } },
-    { "type": "pocket",  "parameters": { "width": number, "height": number, "depth": number, "position": {"x": number, "y": number}, "face": "top|bottom|front|back|left|right" } },
-    { "type": "fillet",  "parameters": { "radius": number, "edges": "all|top|bottom|vertical" } },
-    { "type": "chamfer", "parameters": { "distance": number, "edges": "all|top|bottom|vertical" } }
-  ]
-}
+  "features_identified": ["list of all features"],
+  "changes_made": ["list of changed items"],
+  "reasoning": "one short sentence explaining the construction order",
+  "ambiguities": ["any unclear parts of the input"]
+}`;
 
-Rules:
-- units: use "in" if you detect imperial markings, otherwise "mm"
-- If dimensions are not labeled, estimate them proportionally from the sketch
-- operations can be an empty array []
-- position x/y are offsets from the center of the chosen face
-- Return ONLY valid JSON. No markdown, no code fences, no prose.`;
+function buildSystemPrompt() {
+  const userText  = (document.getElementById('user-input')?.value || '').trim();
+  const paramsStr = currentSchema ? JSON.stringify(currentSchema, null, 2) : 'none';
+  return SYSTEM_PROMPT_STATIC
+    + `\nCurrent parameters (if any):\n${paramsStr}\nUser input:\n${userText}`;
+}
 
 async function analyzeBlueprint() {
   const key = document.getElementById('api-key').value.trim();
@@ -883,7 +903,7 @@ async function analyzeBlueprint() {
       body: JSON.stringify({
         apiKey: key,
         imageBlock,
-        systemPrompt: SYSTEM_PROMPT
+        systemPrompt: buildSystemPrompt()
       })
     });
 
