@@ -446,7 +446,8 @@
 {
   "imports": {
     "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+    "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/",
+    "three-bvh-csg": "https://esm.sh/three-bvh-csg@0.0.17?deps=three@0.158.0"
   }
 }
 </script>
@@ -459,6 +460,7 @@ if (location.protocol === 'file:') {
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Brush, Evaluator, SUBTRACTION, ADDITION, INTERSECTION } from 'three-bvh-csg';
 
 // ════════════════════════════════════════════════
 // Three.js scene setup
@@ -485,18 +487,22 @@ controls.dampingFactor = 0.06;
 controls.minDistance = 5;
 controls.maxDistance = 5000;
 
-// Lights
-scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+// Lights (MeshStandardMaterial needs env light for metalness to show)
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+const sun = new THREE.DirectionalLight(0xffffff, 1.2);
 sun.position.set(150, 300, 100);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 scene.add(sun);
 
-const fill = new THREE.DirectionalLight(0x4fc3f7, 0.25);
+const fill = new THREE.DirectionalLight(0x9ecbff, 0.5);
 fill.position.set(-100, -80, -150);
 scene.add(fill);
+
+const rim = new THREE.DirectionalLight(0xffffff, 0.3);
+rim.position.set(0, -200, -200);
+scene.add(rim);
 
 // Grid & axes
 const grid = new THREE.GridHelper(600, 24, 0x1e5799, 0x0f3460);
@@ -546,108 +552,137 @@ function makeMat(opts = {}) {
 }
 
 // ════════════════════════════════════════════════
-// Schema → Three.js geometry (build_sequence format)
+// Schema → Three.js geometry via CSG boolean ops
 // ════════════════════════════════════════════════
 function schemaToGroup(schema) {
   const group = new THREE.Group();
   const seq = schema.build_sequence;
   if (!Array.isArray(seq) || seq.length === 0) return group;
 
-  const addMat = makeMat({ color: 0x2e86ab });
-  const cutMat = new THREE.MeshBasicMaterial({
-    color: 0xff4444, wireframe: true, transparent: true, opacity: 0.75,
-  });
-  const flatMat = new THREE.MeshBasicMaterial({
-    color: 0xff9800, wireframe: true, transparent: true, opacity: 0.65,
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x7eb8d4,
+    metalness: 0.75,
+    roughness: 0.2,
   });
 
+  const evaluator = new Evaluator();
+  evaluator.useGroups = false;
+
+  let solidBrush = null;
   let baseHeight = 50;
   let baseRadius = 25;
-  let baseIsBox  = false;
-  let baseWidth  = 50, baseDepth = 50;
+
+  function csgOp(a, b, operation) {
+    b.updateMatrixWorld(true);
+    const target = new Brush();
+    evaluator.evaluate(a, b, operation, target);
+    target.material = mat;
+    target.updateMatrixWorld(true);
+    return target;
+  }
+
+  function yCenter(pos, len) {
+    if (pos === 'top')    return  baseHeight / 2 - len / 2;
+    if (pos === 'bottom') return -baseHeight / 2 + len / 2;
+    return 0;
+  }
 
   for (const step of seq) {
     const op = (step.operation || '').toLowerCase();
 
-    // ── Base body ──────────────────────────────
+    // ── Base solid ─────────────────────────────────────────────────
     if (op.startsWith('base_')) {
       const shape = (step.shape || '').toLowerCase();
       const isCyl = shape === 'cylinder' || (step.diameter && !shape.includes('rect'));
       let geo;
       if (isCyl) {
-        const r = (step.diameter ? step.diameter / 2 : 25);
-        const h = (step.height || step.length || 50);
-        baseRadius = r; baseHeight = h;
-        geo = new THREE.CylinderGeometry(r, r, h, 64);
+        baseRadius = step.diameter ? step.diameter / 2 : 25;
+        baseHeight = step.height || step.length || 50;
+        geo = new THREE.CylinderGeometry(baseRadius, baseRadius, baseHeight, 72);
       } else {
         const w = step.width || 50;
-        const h = step.height || 50;
+        baseHeight = step.height || 50;
         const d = step.length || step.depth || 50;
-        baseWidth = w; baseHeight = h; baseDepth = d;
-        baseIsBox = true;
-        geo = new THREE.BoxGeometry(w, h, d);
+        geo = new THREE.BoxGeometry(w, baseHeight, d);
       }
-      const mesh = new THREE.Mesh(geo, makeMat());
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.name = 'base';
-      group.add(mesh);
+      solidBrush = new Brush(geo, mat);
+      solidBrush.updateMatrixWorld(true);
 
-    // ── Additive features (flanges, bosses) ────
+    } else if (!solidBrush) {
+      continue;
+
+    // ── Union: flange / boss / added feature ───────────────────────
     } else if (op === 'add_flange' || op === 'add_boss' || op === 'add_feature') {
-      const r   = step.diameter ? step.diameter / 2 : baseRadius * 1.8;
-      const h   = step.thickness || 8;
+      const r = step.diameter ? step.diameter / 2 : baseRadius * 1.8;
+      const h = step.thickness || 8;
       const pos = (step.position || 'bottom').toLowerCase();
-      const geo = new THREE.CylinderGeometry(r, r, h, 64);
-      const mesh = new THREE.Mesh(geo, addMat);
-      mesh.castShadow = true;
-      mesh.name = op;
-      if (pos === 'top')         mesh.position.y =  baseHeight / 2 + h / 2;
-      else if (pos === 'bottom') mesh.position.y = -baseHeight / 2 - h / 2;
-      group.add(mesh);
+      const b = new Brush(new THREE.CylinderGeometry(r, r, h, 64), mat);
+      if (pos === 'top')         b.position.y =  baseHeight / 2 + h / 2;
+      else if (pos === 'bottom') b.position.y = -baseHeight / 2 - h / 2;
+      solidBrush = csgOp(solidBrush, b, ADDITION);
 
-    // ── Step cut: show stepped-down section ────
+    // ── Step: remove section, add stepped-down cylinder ────────────
     } else if (op === 'cut_step') {
       const newR = step.diameter ? step.diameter / 2 : baseRadius * 0.65;
       const len  = step.depth || 25;
       const pos  = (step.position || 'top').toLowerCase();
-      const geo  = new THREE.CylinderGeometry(newR, newR, len, 64);
-      const mesh = new THREE.Mesh(geo, addMat);
-      mesh.castShadow = true;
-      mesh.name = 'cut_step';
-      if (pos === 'top')         mesh.position.y =  baseHeight / 2 + len / 2;
-      else if (pos === 'bottom') mesh.position.y = -baseHeight / 2 - len / 2;
-      group.add(mesh);
+      const yc   = yCenter(pos, len);
 
-    // ── Hole: red wireframe cylinder ───────────
+      // Remove full section at that position
+      const rem = new Brush(
+        new THREE.CylinderGeometry(baseRadius + 10, baseRadius + 10, len + 0.2, 64), mat
+      );
+      rem.position.y = yc;
+      solidBrush = csgOp(solidBrush, rem, SUBTRACTION);
+
+      // Add back the smaller-diameter section
+      const add = new Brush(new THREE.CylinderGeometry(newR, newR, len, 64), mat);
+      add.position.y = yc;
+      solidBrush = csgOp(solidBrush, add, ADDITION);
+
+    // ── Bore / hole: subtract cylinder ────────────────────────────
     } else if (op === 'cut_hole') {
       const r     = step.diameter ? step.diameter / 2 : 8;
-      const depth = step.through ? (baseHeight + 20) : (step.depth || baseHeight);
-      const pos   = (step.position || '').toLowerCase();
-      const geo   = new THREE.CylinderGeometry(r, r, depth + 2, 32);
-      const mesh  = new THREE.Mesh(geo, cutMat);
-      if (pos === 'top')         mesh.position.y =  baseHeight / 2;
-      else if (pos === 'bottom') mesh.position.y = -baseHeight / 2;
-      // 'along_length' / 'center' → stays at 0 (axial bore)
-      group.add(mesh);
+      const depth = step.through ? baseHeight + 400 : (step.depth || baseHeight);
+      const pos   = (step.position || 'along_length').toLowerCase();
+      const b = new Brush(new THREE.CylinderGeometry(r, r, depth + 2, 48), mat);
+      if (pos === 'top')         b.position.y =  baseHeight / 2;
+      else if (pos === 'bottom') b.position.y = -baseHeight / 2;
+      // 'along_length' / 'center' → y=0, axial bore
+      solidBrush = csgOp(solidBrush, b, SUBTRACTION);
 
-    // ── Flats (hex/square): orange wireframe ───
+    // ── Flats: subtract material outside the across-flats boundary ──
     } else if (op === 'cut_flats') {
-      const af  = step.across_flats || baseRadius * 1.5;
-      const len = step.depth || baseHeight;
-      const geo = new THREE.BoxGeometry(af, len, af);
-      group.add(new THREE.Mesh(geo, flatMat));
+      const af      = step.across_flats || baseRadius * 1.5;
+      const flatLen = step.depth || baseHeight;
+      const pos     = (step.position || 'along_length').toLowerCase();
+      const yc      = yCenter(pos, flatLen);
+      const big     = 2000;
 
-    // ── Generic profile cut ────────────────────
+      for (const side of [-1, 1]) {
+        const b = new Brush(new THREE.BoxGeometry(big, flatLen + 0.2, big), mat);
+        b.position.set(side * (af / 2 + big / 2), yc, 0);
+        solidBrush = csgOp(solidBrush, b, SUBTRACTION);
+      }
+
+    // ── Profile cut: subtract a box ───────────────────────────────
     } else if (op === 'cut_profile') {
-      const w = step.width || baseRadius;
+      const w = step.width  || baseRadius;
       const h = step.height || baseHeight;
-      const d = step.depth || 10;
-      group.add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cutMat));
+      const d = step.depth  || 10;
+      const b = new Brush(new THREE.BoxGeometry(w, h, d), mat);
+      solidBrush = csgOp(solidBrush, b, SUBTRACTION);
     }
-    // fillet / chamfer → params panel only, no geometry change
+    // fillet / chamfer: not representable with simple geometry — params panel only
   }
 
+  if (solidBrush) {
+    solidBrush.material = mat;
+    solidBrush.castShadow = true;
+    solidBrush.receiveShadow = true;
+    solidBrush.name = 'base';
+    group.add(solidBrush);
+  }
   return group;
 }
 
