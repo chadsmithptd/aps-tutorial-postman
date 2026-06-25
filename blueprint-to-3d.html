@@ -301,6 +301,36 @@
     }
     .view-btn:hover { background: rgba(15,52,96,0.9); }
 
+    /* Multi-view analysis block in params panel */
+    .analysis-block {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.55;
+      padding: 4px 0 6px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow: hidden;
+      max-height: 90px;
+      mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+      transition: max-height 0.25s ease;
+    }
+    .analysis-block.expanded {
+      max-height: 2000px;
+      mask-image: none;
+      -webkit-mask-image: none;
+    }
+    .analysis-toggle {
+      font-size: 10px;
+      color: var(--accent);
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      margin-top: 2px;
+    }
+    .analysis-toggle:hover { text-decoration: underline; }
+
     /* Face-selection info card */
     #face-info {
       position: absolute;
@@ -576,6 +606,7 @@ new ResizeObserver(resize).observe(viewport);
 // ════════════════════════════════════════════════
 let currentModel    = null;
 let currentSchema   = null;
+let currentAnalysis = null;   // step-1 multi-view reconciliation text
 let imageBase64     = null;   // set when upload mode is used
 let imageUrl        = null;   // set when url mode is used
 let inputMode       = 'upload'; // 'upload' | 'url'
@@ -799,6 +830,25 @@ function updateParamsPanel(schema) {
   unitsEl.className = 'part-units';
   unitsEl.textContent = `${schema.parameters?.material || ''} · ${unit}`;
   panel.appendChild(unitsEl);
+
+  // Multi-view reconciliation analysis (from step 1)
+  if (currentAnalysis) {
+    appendOpLabel(panel, 'BLUEPRINT ANALYSIS');
+    const block = document.createElement('div');
+    block.className = 'analysis-block';
+    block.id = 'analysis-text-block';
+    block.textContent = currentAnalysis;
+    panel.appendChild(block);
+
+    const toggle = document.createElement('button');
+    toggle.className = 'analysis-toggle';
+    toggle.textContent = 'Show full analysis ▾';
+    toggle.addEventListener('click', () => {
+      const expanded = block.classList.toggle('expanded');
+      toggle.textContent = expanded ? 'Collapse ▴' : 'Show full analysis ▾';
+    });
+    panel.appendChild(toggle);
+  }
 
   // Overall length
   if (schema.parameters?.overall_length) {
@@ -1171,17 +1221,39 @@ async function analyzeBlueprint() {
     imageBlock = { type: 'image', source: { type: 'base64', media_type: mimeType, data: b64data } };
   }
 
-  showLoading(true, 'Analyzing blueprint with Claude Vision...');
+  showLoading(true, 'Step 1 / 2 — Identifying views & extracting dimensions…');
   showAnalyzeMsg('', '');
+  currentAnalysis = null;
 
   try {
+    // ── Step 1: Multi-view extraction and reconciliation ──────────────────
+    let reconciliationText = '';
+    try {
+      const r1 = await fetch('/.netlify/functions/extract-views', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ apiKey: key, imageBlock })
+      });
+      if (r1.ok) {
+        const d1 = await r1.json();
+        reconciliationText = (d1?.content?.[0]?.text || '').trim();
+        currentAnalysis = reconciliationText;
+      }
+    } catch (e1) {
+      console.warn('Step 1 (view extraction) failed — continuing without reconciliation:', e1.message);
+    }
+
+    // ── Step 2: Reconciled JSON generation ───────────────────────────────
+    showLoading(true, 'Step 2 / 2 — Reconciling dimensions and building model…');
+
     const res = await fetch('/.netlify/functions/analyze', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         apiKey: key,
         imageBlock,
-        systemPrompt: buildSystemPrompt()
+        systemPrompt: buildSystemPrompt(),
+        reconciliationText
       })
     });
 
@@ -1199,8 +1271,6 @@ async function analyzeBlueprint() {
     const schema = JSON.parse(text);
     renderSchema(schema);
     showAnalyzeMsg('Analysis complete!', 'success');
-
-    // Switch to parameters tab
     activateTab('params');
 
   } catch (e) {
