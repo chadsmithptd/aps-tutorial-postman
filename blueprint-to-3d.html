@@ -393,6 +393,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="params">Parameters</div>
       <div class="tab" data-tab="json">JSON</div>
+      <div class="tab" data-tab="cq">CadQuery</div>
     </div>
 
     <!-- Parameters tab -->
@@ -411,6 +412,18 @@
         placeholder='JSON schema will appear here after analysis...'></textarea>
       <button class="btn btn-ghost" id="apply-json-btn">Apply JSON</button>
       <div class="msg" id="json-msg"></div>
+    </div>
+
+    <!-- CadQuery tab -->
+    <div class="tab-pane" id="tab-cq">
+      <textarea class="json-editor" id="cq-editor" readonly
+        placeholder='CadQuery Python code will appear here after analysis...'
+        style="height:310px;color:#c5e8b0;"></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn btn-ghost" id="copy-cq-btn">Copy Code</button>
+        <button class="btn btn-ghost" id="dl-cq-btn">Download .py</button>
+      </div>
+      <div class="msg" id="cq-msg"></div>
     </div>
 
   </div>
@@ -750,6 +763,7 @@ async function renderSchema(schema) {
 
   updateParamsPanel(schema);
   document.getElementById('json-editor').value = JSON.stringify(schema, null, 2);
+  document.getElementById('cq-editor').value   = schemaToCadQuery(schema);
   const unit = schema.parameters?.overall_length?.unit || 'mm';
   setStatus(`${schema.part_type || 'Part'}  |  ${unit}`, 'ok');
 }
@@ -876,6 +890,200 @@ function makeParamRow(key, val, unit) {
   el.appendChild(lbl); el.appendChild(input); el.appendChild(unitEl);
   return { el, input };
 }
+
+// ════════════════════════════════════════════════
+// CadQuery code generation
+// ════════════════════════════════════════════════
+function schemaToCadQuery(schema) {
+  const seq    = schema.build_sequence || [];
+  const params = schema.parameters || {};
+  const unit   = params.overall_length?.unit || 'mm';
+  const part   = schema.part_type || 'part';
+  const mat    = params.material  || '';
+
+  const L = [];           // lines of generated code
+  const c = s => L.push(s);
+
+  c('import cadquery as cq');
+  c('');
+  c(`# ${part}${mat ? '  |  ' + mat : ''}  |  ${unit}`);
+  if (schema.reasoning) c(`# ${schema.reasoning}`);
+  c('');
+
+  let baseH  = 50;   // base cylinder/box height (Z extent)
+  let baseR  = 25;   // base radius (cylinder only)
+  let stepIdx = 0;   // for unique variable names
+
+  for (const step of seq) {
+    const op  = (step.operation || '').toLowerCase();
+    const note = step.notes ? `  # ${step.notes}` : '';
+
+    // ── Base solid ──────────────────────────────────────────
+    if (op.startsWith('base_')) {
+      const isCyl = step.diameter || (step.shape || '').includes('cyl');
+      if (isCyl) {
+        baseR = step.diameter ? step.diameter / 2 : 25;
+        baseH = step.height || step.length || 50;
+        c(`# 1. Base cylinder — ∅${step.diameter || baseR * 2} × ${baseH} ${unit}`);
+        c(`result = (`);
+        c(`    cq.Workplane("XY")`);
+        c(`    .circle(${baseR})${note}`);
+        c(`    .extrude(${baseH})`);
+        c(`)`);
+      } else {
+        const w = step.width  || 50;
+        const d = step.length || step.depth || 50;
+        baseH = step.height || 50;
+        c(`# 1. Base box — ${w} × ${d} × ${baseH} ${unit}`);
+        c(`result = (`);
+        c(`    cq.Workplane("XY")`);
+        c(`    .rect(${w}, ${d})${note}`);
+        c(`    .extrude(${baseH})`);
+        c(`)`);
+      }
+
+    // ── Union: flange / boss ─────────────────────────────────
+    } else if (op === 'add_flange' || op === 'add_boss' || op === 'add_feature') {
+      stepIdx++;
+      const r   = step.diameter ? step.diameter / 2 : +(baseR * 1.8).toFixed(2);
+      const h   = step.thickness || 8;
+      const pos = (step.position || 'bottom').toLowerCase();
+      const varName = op === 'add_flange' ? 'flange' : 'boss';
+      const zOrigin = pos === 'top' ? baseH : (pos === 'bottom' ? -h : (baseH - h) / 2);
+      c('');
+      c(`# ${stepIdx + 1}. ${op.replace(/_/g, ' ')} — ∅${r * 2} × ${h} ${unit} at ${pos}`);
+      c(`${varName} = (`);
+      c(`    cq.Workplane("XY", origin=(0, 0, ${zOrigin}))`);
+      c(`    .circle(${r})${note}`);
+      c(`    .extrude(${h})`);
+      c(`)`);
+      c(`result = result.union(${varName})`);
+
+    // ── Step: remove section then add stepped-down cylinder ──
+    } else if (op === 'cut_step') {
+      stepIdx++;
+      const newR = step.diameter ? step.diameter / 2 : +(baseR * 0.65).toFixed(2);
+      const len  = step.depth || 25;
+      const pos  = (step.position || 'top').toLowerCase();
+      const zStart = pos === 'top' ? baseH - len : (pos === 'bottom' ? 0 : (baseH - len) / 2);
+      c('');
+      c(`# ${stepIdx + 1}. Step — reduce to ∅${newR * 2} for ${len} ${unit} at ${pos}`);
+      c(`result = result.cut(`);
+      c(`    cq.Workplane("XY", origin=(0, 0, ${zStart}))`);
+      c(`    .circle(${baseR + 1})  # remove the full-radius section`);
+      c(`    .extrude(${len})`);
+      c(`)`);
+      c(`result = result.union(`);
+      c(`    cq.Workplane("XY", origin=(0, 0, ${zStart}))`);
+      c(`    .circle(${newR})  # add back stepped diameter${note}`);
+      c(`    .extrude(${len})`);
+      c(`)`);
+
+    // ── Bore / through hole ──────────────────────────────────
+    } else if (op === 'cut_hole') {
+      stepIdx++;
+      const r     = step.diameter ? step.diameter / 2 : 8;
+      const through = step.through;
+      const depth = step.depth || baseH;
+      const pos   = (step.position || 'along_length').toLowerCase();
+      c('');
+      c(`# ${stepIdx + 1}. Bore — ∅${r * 2} ${through ? 'through' : depth + ' ' + unit + ' blind'}`);
+      if (pos === 'along_length' || pos === 'center') {
+        // Axial bore — drill down from top face
+        c(`result = (`);
+        c(`    result`);
+        c(`    .faces(">Z")`);
+        c(`    .workplane()`);
+        c(`    .circle(${r})${note}`);
+        c(`    .${through ? 'cutThruAll()' : `cutBlind(-${depth})`}`);
+        c(`)`);
+      } else {
+        // Non-axial — place on appropriate face
+        const face = pos === 'top' ? '">Z"' : pos === 'bottom' ? '"<Z"' : '">Z"';
+        c(`result = (`);
+        c(`    result`);
+        c(`    .faces(${face})`);
+        c(`    .workplane()`);
+        c(`    .circle(${r})${note}`);
+        c(`    .${through ? 'cutThruAll()' : `cutBlind(-${depth})`}`);
+        c(`)`);
+      }
+
+    // ── Flats (2-flat wrench flats) ──────────────────────────
+    } else if (op === 'cut_flats') {
+      stepIdx++;
+      const af      = step.across_flats || +(baseR * 1.5).toFixed(2);
+      const flatLen = step.depth || baseH;
+      const pos     = (step.position || 'along_length').toLowerCase();
+      const zStart  = pos === 'top' ? baseH - flatLen : (pos === 'bottom' ? 0 : (baseH - flatLen) / 2);
+      const half    = af / 2;
+      const big     = 2000;
+      c('');
+      c(`# ${stepIdx + 1}. Flats — across flats ${af} ${unit}${note}`);
+      c(`_half_af = ${half}`);
+      c(`_big = ${big}`);
+      c(`for _sign in (-1, 1):`);
+      c(`    result = result.cut(`);
+      c(`        cq.Workplane("XY", origin=(_sign * (_half_af + _big / 2), 0, ${zStart}))`);
+      c(`        .rect(_big, _big)`);
+      c(`        .extrude(${flatLen})`);
+      c(`    )`);
+
+    // ── Fillet ───────────────────────────────────────────────
+    } else if (op === 'fillet') {
+      stepIdx++;
+      const r = step.radius || 1;
+      c('');
+      c(`# ${stepIdx + 1}. Fillet r=${r}${note}`);
+      c(step.edges === 'all'
+        ? `result = result.edges().fillet(${r})`
+        : `result = result.edges("|Z").fillet(${r})  # refine edge selector as needed`);
+
+    // ── Chamfer ──────────────────────────────────────────────
+    } else if (op === 'chamfer') {
+      stepIdx++;
+      const d = step.radius || step.distance || 1;
+      c('');
+      c(`# ${stepIdx + 1}. Chamfer d=${d}${note}`);
+      c(step.edges === 'all'
+        ? `result = result.edges().chamfer(${d})`
+        : `result = result.edges("|Z").chamfer(${d})  # refine edge selector as needed`);
+    }
+  }
+
+  c('');
+  c('# ── Export ─────────────────────────────────────────────');
+  c(`show_object(result)                                  # CQ-editor / cq-jupyter`);
+  c(`# cq.exporters.export(result, "${part}.step")        # STEP for CAM`);
+  c(`# cq.exporters.export(result, "${part}.stl")         # STL for 3D print`);
+
+  return L.join('\n');
+}
+
+// ════════════════════════════════════════════════
+// CadQuery tab buttons
+// ════════════════════════════════════════════════
+document.getElementById('copy-cq-btn').addEventListener('click', () => {
+  const code = document.getElementById('cq-editor').value;
+  if (!code) return;
+  navigator.clipboard.writeText(code).then(() => {
+    const el = document.getElementById('cq-msg');
+    el.textContent = 'Copied!'; el.className = 'msg success';
+    setTimeout(() => { el.textContent = ''; el.className = 'msg'; }, 2000);
+  });
+});
+
+document.getElementById('dl-cq-btn').addEventListener('click', () => {
+  const code = document.getElementById('cq-editor').value;
+  if (!code) return;
+  const schema = JSON.parse(document.getElementById('json-editor').value || '{}');
+  const name   = (schema.part_type || 'part').replace(/\s+/g, '_');
+  const blob   = new Blob([code], { type: 'text/plain' });
+  const a      = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}.py`;
+  a.click();
+});
 
 // ════════════════════════════════════════════════
 // Claude API
