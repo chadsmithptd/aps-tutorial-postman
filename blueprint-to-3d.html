@@ -459,9 +459,9 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/",
-    "three-bvh-csg": "https://esm.sh/three-bvh-csg@0.0.17?deps=three@0.158.0"
+    "three": "https://esm.sh/three@0.158.0",
+    "three/addons/": "https://esm.sh/three@0.158.0/examples/jsm/",
+    "three-csg-ts": "https://esm.sh/three-csg-ts@3.1.13?deps=three@0.158.0"
   }
 }
 </script>
@@ -576,28 +576,25 @@ async function schemaToGroup(schema) {
 
   const mat = new THREE.MeshStandardMaterial({
     color: 0x7eb8d4, metalness: 0.75, roughness: 0.2,
+    side: THREE.DoubleSide,
   });
 
-  // Lazy-load CSG — if it fails the UI still works
-  let Brush, Evaluator, SUBTRACTION, ADDITION;
+  // Lazy-load three-csg-ts — same CDN as three so instance is shared
+  let CSG;
   try {
-    const csg   = await import('three-bvh-csg');
-    Brush        = csg.Brush;
-    Evaluator    = csg.Evaluator;
-    SUBTRACTION  = csg.SUBTRACTION;
-    ADDITION     = csg.ADDITION;
+    const mod = await import('three-csg-ts');
+    CSG = mod.CSG;
+    if (!CSG || typeof CSG.union !== 'function') throw new Error('CSG.union missing');
   } catch (e) {
-    console.warn('CSG unavailable, rendering base shape only:', e.message);
+    console.warn('CSG unavailable:', e.message);
+    setStatus('CSG load failed — showing base shape only. (' + e.message + ')', 'error');
     for (const step of seq) {
       if ((step.operation || '').startsWith('base_')) {
-        const isCyl = step.diameter || (step.shape || '').includes('cyl');
         const h = step.height || step.length || 50;
         const r = step.diameter ? step.diameter / 2 : 25;
-        const geo = isCyl
-          ? new THREE.CylinderGeometry(r, r, h, 64)
-          : new THREE.BoxGeometry(step.width || 50, h, step.length || step.depth || 50);
+        const geo = new THREE.CylinderGeometry(r, r, h, 64);
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.y = h / 2;   // bottom at y=0
+        mesh.position.y = h / 2;
         mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'base';
         group.add(mesh);
         break;
@@ -606,128 +603,103 @@ async function schemaToGroup(schema) {
     return group;
   }
 
-  const evaluator = new Evaluator();
-  evaluator.useGroups = false;
-
-  let solidBrush = null;
-  let baseH = 50;
-  let baseR = 25;
-
-  // Place a brush with its BOTTOM at y=zBottom, extending h units upward.
-  // Direct equivalent of: cq.Workplane("XY", origin=(0,0,zBottom)).extrude(h)
-  function brushAt(geo, zBottom, h) {
-    const b = new Brush(geo, mat);
-    b.position.y = zBottom + h / 2;
-    b.updateMatrixWorld(true);
-    return b;
+  // Place a mesh with its BOTTOM at y=zBottom, extending h upward.
+  // Mirrors: cq.Workplane("XY", origin=(0,0,zBottom)).extrude(h)
+  function meshAt(geo, zBottom, h) {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.y = zBottom + h / 2;
+    m.updateMatrix();
+    return m;
   }
 
-  function csgOp(a, b, op) {
-    b.updateMatrixWorld(true);
-    const target = new Brush();
-    evaluator.evaluate(a, b, op, target);
-    target.material = mat;
-    target.updateMatrixWorld(true);
-    return target;
-  }
+  function csgUnion(a, b)    { a.updateMatrix(); b.updateMatrix(); const r = CSG.union(a, b);    r.material = mat; return r; }
+  function csgSubtract(a, b) { a.updateMatrix(); b.updateMatrix(); const r = CSG.subtract(a, b); r.material = mat; return r; }
 
-  // Mirrors the zStart / zOrigin logic in schemaToCadQuery() exactly.
+  // Mirrors zStart / zOrigin logic in schemaToCadQuery() exactly.
   function zStart(pos, len) {
     if (pos === 'top')    return baseH - len;
     if (pos === 'bottom') return 0;
-    return (baseH - len) / 2;   // 'along_length' / 'middle'
+    return (baseH - len) / 2;
   }
+
+  let solid = null;
+  let baseH = 50;
+  let baseR = 25;
 
   for (const step of seq) {
     const op = (step.operation || '').toLowerCase();
 
-    // ── Base solid — bottom at Y=0, top at Y=baseH ────────────────────
+    // ── Base solid — bottom at Y=0, top at Y=baseH ──────────────────────
     if (op.startsWith('base_')) {
       const isCyl = step.diameter || (step.shape || '').includes('cyl');
       if (isCyl) {
         baseR = step.diameter ? step.diameter / 2 : 25;
         baseH = step.height || step.length || 50;
-        solidBrush = brushAt(new THREE.CylinderGeometry(baseR, baseR, baseH, 72), 0, baseH);
+        solid = meshAt(new THREE.CylinderGeometry(baseR, baseR, baseH, 72), 0, baseH);
       } else {
         const w = step.width || 50;
         const d = step.length || step.depth || 50;
         baseH = step.height || 50;
-        solidBrush = brushAt(new THREE.BoxGeometry(w, baseH, d), 0, baseH);
+        solid = meshAt(new THREE.BoxGeometry(w, baseH, d), 0, baseH);
       }
 
-    } else if (!solidBrush) {
+    } else if (!solid) {
       continue;
 
-    // ── Flange / boss — same zOrigin as schemaToCadQuery ──────────────
+    // ── Flange / boss ── union coaxial cylinder ──────────────────────────
     } else if (op === 'add_flange' || op === 'add_boss' || op === 'add_feature') {
       const r  = step.diameter ? step.diameter / 2 : +(baseR * 1.8).toFixed(2);
       const h  = step.thickness || 8;
       const pos = (step.position || 'bottom').toLowerCase();
       const zO  = pos === 'top' ? baseH : pos === 'bottom' ? -h : (baseH - h) / 2;
-      solidBrush = csgOp(solidBrush,
-        brushAt(new THREE.CylinderGeometry(r, r, h, 64), zO, h),
-        ADDITION);
+      solid = csgUnion(solid, meshAt(new THREE.CylinderGeometry(r, r, h, 64), zO, h));
 
-    // ── Step — zStart mirrors schemaToCadQuery exactly ────────────────
+    // ── Step — remove section then add stepped-down cylinder ─────────────
     } else if (op === 'cut_step') {
       const newR = step.diameter ? step.diameter / 2 : +(baseR * 0.65).toFixed(2);
       const len  = step.depth || 25;
-      const pos  = (step.position || 'top').toLowerCase();
-      const zO   = zStart(pos, len);
+      const zO   = zStart((step.position || 'top').toLowerCase(), len);
+      solid = csgSubtract(solid, meshAt(new THREE.CylinderGeometry(baseR + 10, baseR + 10, len + 0.2, 64), zO, len + 0.2));
+      solid = csgUnion(solid,    meshAt(new THREE.CylinderGeometry(newR, newR, len, 64), zO, len));
 
-      solidBrush = csgOp(solidBrush,
-        brushAt(new THREE.CylinderGeometry(baseR + 10, baseR + 10, len + 0.2, 64), zO, len + 0.2),
-        SUBTRACTION);
-      solidBrush = csgOp(solidBrush,
-        brushAt(new THREE.CylinderGeometry(newR, newR, len, 64), zO, len),
-        ADDITION);
-
-    // ── Bore — matches cq.faces(">Z").cutThruAll() / cutBlind() ───────
+    // ── Bore / through-hole ───────────────────────────────────────────────
     } else if (op === 'cut_hole') {
       const r     = step.diameter ? step.diameter / 2 : 8;
-      const depth = step.through ? baseH + 400 : (step.depth || baseH);
-      // Through: tool placed so it starts below y=0 and exits above y=baseH
-      // Blind: tool placed from top face downward
-      const zTool = step.through ? -1 : baseH - depth;
-      solidBrush = csgOp(solidBrush,
-        brushAt(new THREE.CylinderGeometry(r, r, depth + 2, 48), zTool, depth + 2),
-        SUBTRACTION);
+      const depth = step.through ? baseH + 4 : (step.depth || baseH);
+      const zTool = step.through ? -2 : baseH - depth;
+      solid = csgSubtract(solid, meshAt(new THREE.CylinderGeometry(r, r, depth + 4, 48), zTool, depth + 4));
 
-    // ── Flats — zStart mirrors schemaToCadQuery ───────────────────────
+    // ── Flats (wrench / hex) ──────────────────────────────────────────────
     } else if (op === 'cut_flats') {
       const af      = step.across_flats || +(baseR * 1.5).toFixed(2);
       const flatLen = step.depth || baseH;
-      const pos     = (step.position || 'along_length').toLowerCase();
-      const zO      = zStart(pos, flatLen);
+      const zO      = zStart((step.position || 'along_length').toLowerCase(), flatLen);
       const half    = af / 2;
       const big     = 2000;
-
       for (const sign of [-1, 1]) {
-        const b = new Brush(new THREE.BoxGeometry(big, flatLen + 0.2, big), mat);
+        const b = new THREE.Mesh(new THREE.BoxGeometry(big, flatLen + 0.2, big), mat);
         b.position.set(sign * (half + big / 2), zO + (flatLen + 0.2) / 2, 0);
-        b.updateMatrixWorld(true);
-        solidBrush = csgOp(solidBrush, b, SUBTRACTION);
+        b.updateMatrix();
+        solid = csgSubtract(solid, b);
       }
 
-    // ── Profile cut ───────────────────────────────────────────────────
+    // ── Profile cut ───────────────────────────────────────────────────────
     } else if (op === 'cut_profile') {
-      const w = step.width  || baseR;
-      const h = step.height || baseH;
-      const d = step.depth  || 10;
-      const b = new Brush(new THREE.BoxGeometry(w, h, d), mat);
+      const b = new THREE.Mesh(
+        new THREE.BoxGeometry(step.width || baseR, step.height || baseH, step.depth || 10), mat);
       b.position.y = baseH / 2;
-      b.updateMatrixWorld(true);
-      solidBrush = csgOp(solidBrush, b, SUBTRACTION);
+      b.updateMatrix();
+      solid = csgSubtract(solid, b);
     }
-    // fillet / chamfer: no geometry equivalent — shown in params panel only
+    // fillet / chamfer: no geometry equivalent — reflected in params panel only
   }
 
-  if (solidBrush) {
-    solidBrush.material = mat;
-    solidBrush.castShadow = true;
-    solidBrush.receiveShadow = true;
-    solidBrush.name = 'base';
-    group.add(solidBrush);
+  if (solid) {
+    solid.material = mat;
+    solid.castShadow = true;
+    solid.receiveShadow = true;
+    solid.name = 'base';
+    group.add(solid);
   }
   return group;
 }
