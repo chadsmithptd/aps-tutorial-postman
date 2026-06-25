@@ -460,7 +460,7 @@ if (location.protocol === 'file:') {
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Brush, Evaluator, SUBTRACTION, ADDITION, INTERSECTION } from 'three-bvh-csg';
+// three-bvh-csg loaded lazily inside schemaToGroup so a CDN failure never breaks the UI
 
 // ════════════════════════════════════════════════
 // Three.js scene setup
@@ -554,7 +554,7 @@ function makeMat(opts = {}) {
 // ════════════════════════════════════════════════
 // Schema → Three.js geometry via CSG boolean ops
 // ════════════════════════════════════════════════
-function schemaToGroup(schema) {
+async function schemaToGroup(schema) {
   const group = new THREE.Group();
   const seq = schema.build_sequence;
   if (!Array.isArray(seq) || seq.length === 0) return group;
@@ -564,6 +564,37 @@ function schemaToGroup(schema) {
     metalness: 0.75,
     roughness: 0.2,
   });
+
+  // Lazy-load CSG library — if it fails, fall back to a simple solid so the UI stays functional
+  let Brush, Evaluator, SUBTRACTION, ADDITION;
+  try {
+    const csg = await import('three-bvh-csg');
+    Brush      = csg.Brush;
+    Evaluator  = csg.Evaluator;
+    SUBTRACTION = csg.SUBTRACTION;
+    ADDITION    = csg.ADDITION;
+  } catch (e) {
+    console.warn('CSG library unavailable, rendering base shape only:', e.message);
+    // Minimal fallback: just render the first base shape
+    for (const step of seq) {
+      if ((step.operation || '').startsWith('base_')) {
+        const isCyl = step.diameter || (step.shape || '').includes('cyl');
+        let geo;
+        if (isCyl) {
+          const r = step.diameter ? step.diameter / 2 : 25;
+          const h = step.height || step.length || 50;
+          geo = new THREE.CylinderGeometry(r, r, h, 64);
+        } else {
+          geo = new THREE.BoxGeometry(step.width || 50, step.height || 50, step.length || step.depth || 50);
+        }
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'base';
+        group.add(mesh);
+        break;
+      }
+    }
+    return group;
+  }
 
   const evaluator = new Evaluator();
   evaluator.useGroups = false;
@@ -689,7 +720,7 @@ function schemaToGroup(schema) {
 // ════════════════════════════════════════════════
 // Render schema
 // ════════════════════════════════════════════════
-function renderSchema(schema) {
+async function renderSchema(schema) {
   // Remove old model
   if (currentModel) {
     scene.remove(currentModel);
@@ -697,7 +728,7 @@ function renderSchema(schema) {
   }
 
   currentSchema = schema;
-  currentModel  = schemaToGroup(schema);
+  currentModel  = await schemaToGroup(schema);
   scene.add(currentModel);
 
   applyWireframe(wireframeOn);
