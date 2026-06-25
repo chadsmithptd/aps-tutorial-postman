@@ -438,6 +438,7 @@
       <button class="view-btn" id="btn-front">Front</button>
       <button class="view-btn" id="btn-side">Side</button>
       <button class="view-btn" id="btn-iso">Iso</button>
+      <button class="view-btn" id="btn-glb" style="margin-left:10px;background:rgba(79,195,247,0.15);color:var(--accent);" disabled>⬇ GLB</button>
     </div>
 
     <!-- Loading -->
@@ -473,6 +474,7 @@ if (location.protocol === 'file:') {
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 // three-bvh-csg loaded lazily inside schemaToGroup so a CDN failure never breaks the UI
 
 // ════════════════════════════════════════════════
@@ -764,6 +766,7 @@ async function renderSchema(schema) {
   updateParamsPanel(schema);
   document.getElementById('json-editor').value = JSON.stringify(schema, null, 2);
   document.getElementById('cq-editor').value   = schemaToCadQuery(schema);
+  document.getElementById('btn-glb').disabled  = false;
   const unit = schema.parameters?.overall_length?.unit || 'mm';
   setStatus(`${schema.part_type || 'Part'}  |  ${unit}`, 'ok');
 }
@@ -1054,7 +1057,7 @@ function schemaToCadQuery(schema) {
   c('');
   c('# ── Export ─────────────────────────────────────────────');
   c(`show_object(result)                                  # CQ-editor / cq-jupyter`);
-  c(`# cq.exporters.export(result, "${part}.step")        # STEP for CAM`);
+  c(`cq.exporters.export(result, "${part}.step")          # STEP for CAM`);
   c(`# cq.exporters.export(result, "${part}.stl")         # STL for 3D print`);
 
   return L.join('\n');
@@ -1366,6 +1369,35 @@ document.getElementById('btn-top').addEventListener('click',   () => snapCamera(
 document.getElementById('btn-front').addEventListener('click', () => snapCamera(new THREE.Vector3(0, 0, 1)));
 document.getElementById('btn-side').addEventListener('click',  () => snapCamera(new THREE.Vector3(1, 0, 0)));
 document.getElementById('btn-iso').addEventListener('click',   () => snapCamera(new THREE.Vector3(1, 0.7, 1)));
+
+// ── GLB Export ───────────────────────────────────────
+const glbBtn = document.getElementById('btn-glb');
+glbBtn.addEventListener('click', () => {
+  if (!currentModel) return;
+  const name = (currentSchema?.part_type || 'part').replace(/\s+/g, '_');
+  glbBtn.disabled = true;
+  glbBtn.textContent = '⏳ Exporting…';
+  const exporter = new GLTFExporter();
+  exporter.parse(
+    currentModel,
+    (buffer) => {
+      const blob = new Blob([buffer], { type: 'application/octet-stream' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${name}.glb`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      glbBtn.textContent = '⬇ GLB';
+      glbBtn.disabled = false;
+    },
+    (err) => {
+      console.error('GLB export failed:', err);
+      glbBtn.textContent = '⬇ GLB';
+      glbBtn.disabled = false;
+    },
+    { binary: true }
+  );
+});
 
 </script>
 </body>
