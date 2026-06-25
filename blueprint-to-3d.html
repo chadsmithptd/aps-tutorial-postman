@@ -323,12 +323,11 @@
 <div class="server-warning" id="server-warning">
   <span>⚠️</span>
   <span>
-    <strong>Local server required.</strong>
-    Browsers block API calls from <code>file://</code> URLs.
-    Open a terminal in the folder containing this file and run one of:<br /><br />
-    Python &nbsp;<code>python3 -m http.server 8080</code><br />
-    Node &nbsp;&nbsp;&nbsp;<code>npx serve .</code><br /><br />
-    Then open <code>http://localhost:8080/blueprint-to-3d.html</code> in your browser.
+    <strong>Deploy to Netlify required.</strong>
+    This page must be hosted on Netlify — the "Analyze Blueprint" button calls a serverless function
+    that only exists when deployed. Opening this file directly won't work.<br /><br />
+    Deploy by connecting your GitHub repo to <a href="https://app.netlify.com" style="color:var(--accent)">app.netlify.com</a>
+    or drag the entire project folder to <a href="https://app.netlify.com/drop" style="color:var(--accent)">netlify.com/drop</a>.
   </span>
 </div>
 
@@ -878,25 +877,13 @@ async function analyzeBlueprint() {
   showAnalyzeMsg('', '');
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/.netlify/functions/analyze', {
       method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-direct-browser-calls': 'true',
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-opus-4-8',
-        max_tokens: 1200,
-        system: SYSTEM_PROMPT,
-        messages: [{
-          role: 'user',
-          content: [
-            imageBlock,
-            { type: 'text', text: 'Analyze this blueprint sketch and return the JSON.' }
-          ]
-        }]
+        apiKey: key,
+        imageBlock,
+        systemPrompt: SYSTEM_PROMPT
       })
     });
 
@@ -921,7 +908,7 @@ async function analyzeBlueprint() {
   } catch (e) {
     const isNetwork = e instanceof TypeError && e.message.toLowerCase().includes('fetch');
     const msg = isNetwork
-      ? 'Network error — if you opened this file directly, serve it from a local server first (see banner above).'
+      ? 'Network error — make sure this page is deployed to Netlify (not opened as a local file).'
       : `Error: ${e.message}`;
     showAnalyzeMsg(msg, 'error');
     setStatus(`Analysis failed — ${isNetwork ? 'network/CORS error' : e.message}`, 'err');
