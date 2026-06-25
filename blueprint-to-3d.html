@@ -301,6 +301,32 @@
     }
     .view-btn:hover { background: rgba(15,52,96,0.9); }
 
+    /* Face-selection info card */
+    #face-info {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      background: rgba(13,13,26,0.92);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: var(--text);
+      pointer-events: none;
+      display: none;
+      min-width: 175px;
+      backdrop-filter: blur(4px);
+    }
+    #face-info .fi-title {
+      color: var(--accent); font-weight: 700; font-size: 10px;
+      letter-spacing: 0.1em; margin-bottom: 5px;
+    }
+    #face-info .fi-row {
+      display: flex; justify-content: space-between; gap: 10px; padding: 1px 0;
+    }
+    #face-info .fi-label { color: var(--muted); }
+    #face-info .fi-val   { color: var(--text); font-family: monospace; }
+
     /* Wireframe toggle */
     .toggle-row {
       display: flex;
@@ -440,6 +466,9 @@
       <button class="view-btn" id="btn-iso">Iso</button>
       <button class="view-btn" id="btn-glb" style="margin-left:10px;background:rgba(79,195,247,0.15);color:var(--accent);" disabled>⬇ GLB</button>
     </div>
+
+    <!-- Face selection info -->
+    <div id="face-info"></div>
 
     <!-- Loading -->
     <div class="loading-overlay" id="loading">
@@ -1369,6 +1398,174 @@ glbBtn.addEventListener('click', () => {
     },
     { binary: true }
   );
+});
+
+// ════════════════════════════════════════════════
+// Face selection
+// ════════════════════════════════════════════════
+const raycaster  = new THREE.Raycaster();
+const pointer    = new THREE.Vector2();
+let selMesh      = null;
+
+const selMat = new THREE.MeshBasicMaterial({
+  color: 0x4fc3f7, transparent: true, opacity: 0.45,
+  side: THREE.DoubleSide,
+  polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  depthTest: true,
+});
+
+// Returns { faces: faceIndex[], normal: Vector3 } for the logical face hit
+function findFaceGroup(geometry, hitFaceIdx) {
+  const pos = geometry.attributes.position;
+  const nor = geometry.attributes.normal;
+  const idx = geometry.index;
+  const totalFaces = idx ? idx.count / 3 : pos.count / 3;
+
+  function vtx(fi, vi) { return idx ? idx.getX(fi * 3 + vi) : fi * 3 + vi; }
+
+  // Average normal + centroid of the hit triangle
+  const refN = new THREE.Vector3();
+  const refP = new THREE.Vector3();
+  for (let v = 0; v < 3; v++) {
+    const b = vtx(hitFaceIdx, v);
+    if (nor) refN.add(new THREE.Vector3(nor.getX(b), nor.getY(b), nor.getZ(b)));
+    refP.add(new THREE.Vector3(pos.getX(b), pos.getY(b), pos.getZ(b)));
+  }
+  if (!nor) {
+    // Compute face normal from positions
+    const a = new THREE.Vector3(pos.getX(vtx(hitFaceIdx,0)), pos.getY(vtx(hitFaceIdx,0)), pos.getZ(vtx(hitFaceIdx,0)));
+    const bv = new THREE.Vector3(pos.getX(vtx(hitFaceIdx,1)), pos.getY(vtx(hitFaceIdx,1)), pos.getZ(vtx(hitFaceIdx,1)));
+    const cv = new THREE.Vector3(pos.getX(vtx(hitFaceIdx,2)), pos.getY(vtx(hitFaceIdx,2)), pos.getZ(vtx(hitFaceIdx,2)));
+    refN.copy(bv.sub(a).cross(cv.clone().sub(a)));
+  }
+  refN.divideScalar(3).normalize();
+  refP.divideScalar(3);
+  const planeD = refN.dot(refP);
+
+  const DOT_THR  = 0.985; // ~10°  — groups flat and near-flat faces
+  const DIST_THR = 1.0;   // units from plane
+
+  const faces = [];
+  const fN = new THREE.Vector3(), fP = new THREE.Vector3();
+  for (let i = 0; i < totalFaces; i++) {
+    fN.set(0,0,0); fP.set(0,0,0);
+    for (let v = 0; v < 3; v++) {
+      const b = vtx(i, v);
+      if (nor) fN.add(new THREE.Vector3(nor.getX(b), nor.getY(b), nor.getZ(b)));
+      fP.add(new THREE.Vector3(pos.getX(b), pos.getY(b), pos.getZ(b)));
+    }
+    fN.divideScalar(3).normalize();
+    fP.divideScalar(3);
+    if (Math.abs(refN.dot(fN)) > DOT_THR && Math.abs(refN.dot(fP) - planeD) < DIST_THR) {
+      faces.push(i);
+    }
+  }
+  return { faces, normal: refN };
+}
+
+// Build an overlay mesh from selected face indices
+function buildSelMesh(geometry, faceIndices, worldMatrix) {
+  const pos = geometry.attributes.position;
+  const idx = geometry.index;
+  function vtx(fi, vi) { return idx ? idx.getX(fi * 3 + vi) : fi * 3 + vi; }
+
+  const arr = new Float32Array(faceIndices.length * 9);
+  let off = 0;
+  for (const fi of faceIndices) {
+    for (let v = 0; v < 3; v++) {
+      const b = vtx(fi, v);
+      arr[off++] = pos.getX(b); arr[off++] = pos.getY(b); arr[off++] = pos.getZ(b);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+  const m = new THREE.Mesh(geo, selMat);
+  m.applyMatrix4(worldMatrix);
+  m.name = 'selection';
+  return m;
+}
+
+function calcArea(geometry, faceIndices) {
+  const pos = geometry.attributes.position;
+  const idx = geometry.index;
+  function vtx(fi, vi) { return idx ? idx.getX(fi * 3 + vi) : fi * 3 + vi; }
+  let area = 0;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (const fi of faceIndices) {
+    a.set(pos.getX(vtx(fi,0)), pos.getY(vtx(fi,0)), pos.getZ(vtx(fi,0)));
+    b.set(pos.getX(vtx(fi,1)), pos.getY(vtx(fi,1)), pos.getZ(vtx(fi,1)));
+    c.set(pos.getX(vtx(fi,2)), pos.getY(vtx(fi,2)), pos.getZ(vtx(fi,2)));
+    area += b.clone().sub(a).cross(c.clone().sub(a)).length() / 2;
+  }
+  return area;
+}
+
+function showFaceCard(normal, area, triCount) {
+  const unit = currentSchema?.parameters?.overall_length?.unit || 'mm';
+  const ax = Math.abs(normal.x), ay = Math.abs(normal.y), az = Math.abs(normal.z);
+  let dir = 'curved surface';
+  if (ay > 0.9) dir = normal.y > 0 ? 'top face (+Y)' : 'bottom face (−Y)';
+  else if (ax > 0.9) dir = normal.x > 0 ? 'flat +X' : 'flat −X';
+  else if (az > 0.9) dir = normal.z > 0 ? 'flat +Z' : 'flat −Z';
+  else if (ay < 0.15) dir = 'radial / side face';
+
+  const el = document.getElementById('face-info');
+  el.innerHTML = `
+    <div class="fi-title">SELECTED FACE</div>
+    <div class="fi-row"><span class="fi-label">Direction</span><span class="fi-val">${dir}</span></div>
+    <div class="fi-row"><span class="fi-label">Normal</span><span class="fi-val">${normal.x.toFixed(2)}, ${normal.y.toFixed(2)}, ${normal.z.toFixed(2)}</span></div>
+    <div class="fi-row"><span class="fi-label">Area</span><span class="fi-val">${area.toFixed(2)} ${unit}²</span></div>
+    <div class="fi-row"><span class="fi-label">Triangles</span><span class="fi-val">${triCount}</span></div>
+    <div style="margin-top:5px;font-size:10px;color:var(--muted);">Click elsewhere to deselect</div>
+  `;
+  el.style.display = 'block';
+}
+
+function clearFaceSelection() {
+  if (selMesh) { scene.remove(selMesh); selMesh.geometry.dispose(); selMesh = null; }
+  document.getElementById('face-info').style.display = 'none';
+}
+
+// Cursor change on hover
+canvas.addEventListener('pointermove', e => {
+  if (!currentModel) return;
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = ((e.clientX - rect.left) / rect.width)  *  2 - 1;
+  pointer.y = -((e.clientY - rect.top)  / rect.height) *  2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const meshes = [];
+  currentModel.traverse(o => { if (o.isMesh && o.name === 'base') meshes.push(o); });
+  canvas.style.cursor = raycaster.intersectObjects(meshes, false).length > 0 ? 'crosshair' : 'default';
+});
+
+// Click to select face group
+canvas.addEventListener('click', e => {
+  if (!currentModel) return;
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = ((e.clientX - rect.left) / rect.width)  *  2 - 1;
+  pointer.y = -((e.clientY - rect.top)  / rect.height) *  2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+
+  const meshes = [];
+  currentModel.traverse(o => { if (o.isMesh && o.name === 'base') meshes.push(o); });
+  const hits = raycaster.intersectObjects(meshes, false);
+
+  if (hits.length === 0) { clearFaceSelection(); return; }
+
+  const hit = hits[0];
+  const srcMesh = hit.object;
+  const geo = srcMesh.geometry;
+
+  // Ensure normals exist
+  if (!geo.attributes.normal) geo.computeVertexNormals();
+
+  const { faces, normal } = findFaceGroup(geo, hit.faceIndex);
+  clearFaceSelection();
+  selMesh = buildSelMesh(geo, faces, srcMesh.matrixWorld);
+  scene.add(selMesh);
+
+  const area = calcArea(geo, faces);
+  showFaceCard(normal, area, faces.length);
 });
 
 </script>
