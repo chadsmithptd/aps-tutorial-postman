@@ -277,10 +277,10 @@
     <label for="api-key-input">API Key:</label>
     <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off">
   </div>
-  <span class="upload-status" id="upload-status">No screenshot loaded</span>
+  <span class="upload-status" id="upload-status">No blueprint loaded</span>
   <input type="file" id="file-input" accept="image/*">
   <button class="btn btn-upload" id="upload-btn" onclick="document.getElementById('file-input').click()">
-    &#8593; Upload Screenshot
+    &#8593; Upload Blueprint
   </button>
   <button class="btn btn-print" onclick="window.print()">
     &#128438; Print
@@ -365,7 +365,7 @@
       <tbody id="ops-tbody">
         <tr>
           <td colspan="5" style="text-align:center; color:#888; padding:20px; font-style:italic;">
-            Upload a ProShop screenshot to populate operations
+            Upload a blueprint to generate operations routing
           </td>
         </tr>
       </tbody>
@@ -426,7 +426,7 @@
     const [meta, base64] = dataUrl.split(',');
     const mediaType = meta.match(/:(.*?);/)[1];
 
-    setStatus('Extracting data from screenshot…', 'loading');
+    setStatus('Analyzing blueprint…', 'loading');
     uploadBtn.disabled = true;
 
     try {
@@ -434,7 +434,7 @@
       populateTraveler(data);
       const cost = calcCost(data._usage);
       const costNote = cost !== null ? `  (${cost})` : '';
-      setStatus('Traveler populated from ' + file.name + costNote, 'success');
+      setStatus('Routing generated from ' + file.name + costNote, 'success');
     } catch (err) {
       setStatus('Error: ' + err.message, 'error');
       console.error(err);
@@ -453,45 +453,42 @@
   }
 
   async function extractFromImage(apiKey, base64, mediaType) {
-    const prompt = `You are analyzing a ProShop ERP work order screenshot. Extract all visible data and return ONLY a valid JSON object with this exact schema — no markdown, no explanation, just raw JSON:
+    const prompt = `You are a master CNC machining quoter with 25 years of experience in high-precision aerospace and defense manufacturing. Analyze this engineering blueprint and produce a complete manufacturing routing.
+
+Your process:
+1. Study every view, dimension, tolerance, surface finish callout, GD&T symbol, thread note, and title block entry
+2. Identify every feature that requires machining: ODs, IDs, faces, shoulders, pockets, slots, holes, counterbores, countersinks, threads, radii, tapers, keyways, etc.
+3. Group features into logical setups — each setup is one clamping/fixturing configuration
+4. Sequence setups in the most efficient machining order (e.g., turn raw stock first, then mill, then grind tight-tolerance features, then outside processing)
+5. Assign the correct machine resource to each operation
+6. Add standard shop closing operations: DEBURR, FINAL INSPECT, SHIP
+
+Title block extraction: pull part name, part number, revision, material spec, and any finish/coating callouts visible. Use "" for anything not shown.
+
+Return ONLY valid JSON — no markdown, no explanation:
 
 {
-  "workOrderNumber": "",
-  "status": "",
-  "mustLeaveBy": "",
-  "customerDue": "",
   "partName": "",
   "partNumber": "",
   "revision": "",
-  "qtyOrdered": "",
-  "rawStockQty": "",
   "material": "",
   "outsideProcessing": "",
   "approvedPrint": "",
-  "createdBy": "",
-  "createdDate": "",
-  "modifiedBy": "",
-  "modifiedDate": "",
-  "jobNotes": "",
   "operations": [
     {
-      "opNumber": "",
-      "description": "",
-      "resource": "",
-      "firstArticle": null,
-      "qtyComplete": "",
-      "complete": null,
-      "dueDate": "",
+      "opNumber": "10",
+      "description": "Lathe Op 1 – Face both ends, turn major OD, drill/bore ID",
+      "resource": "CNC LATHE",
       "notes": ""
     }
   ]
 }
 
-Rules:
-- firstArticle and complete: true if checked/complete, false if explicitly incomplete, null if not applicable or not shown
-- Use empty string "" for any field not visible in the screenshot
-- operations array should contain one entry per operation row visible
-- Return raw JSON only, no code fences`;
+Numbering: multiples of 10 (10, 20, 30…).
+Resource options: CNC LATHE | VMC | HMC | SURFACE GRIND | CYLINDRICAL GRIND | EDM | DEBURR | INSPECT | OUTSIDE PROC | SHIP
+Description format: "Setup Name – comma-separated list of key features machined"
+Use "" for notes unless there is a critical tolerance or special instruction worth flagging.
+Return raw JSON only, no code fences.`;
 
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -536,27 +533,12 @@ Rules:
   }
 
   function populateTraveler(d) {
-    set('wo-number',         d.workOrderNumber);
-    set('wo-status',         d.status);
-    set('wo-must-leave',     d.mustLeaveBy);
-    set('customer-due',      d.customerDue);
-    set('part-name',         d.partName);
-    set('part-number',       d.partNumber);
-    set('part-rev',          d.revision);
-    set('qty-ordered',       d.qtyOrdered);
-    set('raw-stock-qty',     d.rawStockQty);
-    set('material',          d.material);
+    set('part-name',          d.partName);
+    set('part-number',        d.partNumber);
+    set('part-rev',           d.revision);
+    set('material',           d.material);
     set('outside-processing', d.outsideProcessing);
-    set('job-notes',         d.jobNotes);
-    set('approved-print',    d.approvedPrint);
-
-    const created  = [d.createdDate,  d.createdBy ].filter(Boolean).join(' by ');
-    const modified = [d.modifiedDate, d.modifiedBy].filter(Boolean).join(' by ');
-    const parts = [];
-    if (created)  parts.push('Created: '  + created);
-    if (modified) parts.push('Modified: ' + modified);
-    set('record-info', parts.join('  |  ') || '—');
-
+    set('approved-print',     d.approvedPrint);
     buildOpsTable(d.operations || []);
   }
 
