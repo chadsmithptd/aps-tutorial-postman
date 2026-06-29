@@ -447,6 +447,43 @@
   .traveler.simplified .notes-section,
   .traveler.simplified .record-footer { display: none; }
 
+  /* Image preview panel (right of traveler) */
+  #image-panel {
+    display: none;
+    width: 380px;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    align-self: flex-start;
+  }
+
+  .image-panel-header {
+    background: #222;
+    color: #fff;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  #image-panel-img {
+    width: 100%;
+    display: block;
+    max-height: 80vh;
+    object-fit: contain;
+    object-position: top;
+    cursor: zoom-in;
+  }
+  #image-panel-img.zoomed {
+    max-height: none;
+    object-fit: unset;
+    cursor: zoom-out;
+  }
+
   /* Print All container */
   #print-all-container { display: none; }
 
@@ -454,7 +491,7 @@
   @media print {
     body { background: #fff; padding: 0; }
     .toolbar, #preview-panel, #override-panel, #mode-prompt { display: none !important; }
-    #batch-panel, #bom-panel { display: none !important; }
+    #batch-panel, #bom-panel, #image-panel { display: none !important; }
     #main-workspace { display: block !important; }
     .traveler { width: 100%; border: 2px solid #000; }
     .ops-table thead tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -674,6 +711,12 @@
 
   </div><!-- /.traveler -->
 
+  <!-- Blueprint image preview (right of traveler, shown on item selection) -->
+  <div id="image-panel">
+    <div class="image-panel-header">Blueprint</div>
+    <img id="image-panel-img" src="" alt="Blueprint" onclick="this.classList.toggle('zoomed')">
+  </div>
+
 </div><!-- /#main-workspace -->
 
 <!-- Print All container (hidden; shown during Print All via body class) -->
@@ -688,10 +731,11 @@
   const apiKeyInput  = document.getElementById('api-key-input');
   const workspace    = document.getElementById('main-workspace');
 
-  let pendingFiles = [];
-  let allItems     = [];   // packet mode
-  let batchResults = [];   // batch mode [{data, error}]
-  let activeMode   = null; // 'single'|'batch'|'packet'
+  let pendingFiles        = [];
+  let allItems            = [];   // packet mode
+  let batchResults        = [];   // batch mode [{data, imageDataUrl, error}]
+  let packetImageDataUrls = [];   // packet mode: dataUrl per sourceImageIndex
+  let activeMode          = null; // 'single'|'batch'|'packet'
 
   apiKeyInput.value = localStorage.getItem('anthropic_api_key') || '';
   apiKeyInput.addEventListener('change', () => {
@@ -790,7 +834,7 @@
         const [meta, b64] = dataUrl.split(',');
         const mediaType = meta.match(/:(.*?);/)[1];
         const data = await extractFromImage(apiKey, b64, mediaType);
-        batchResults[i] = { data };
+        batchResults[i] = { data, imageDataUrl: dataUrl };
         rows[i].className = 'batch-row ready';
         rows[i].innerHTML = `<span style="flex-shrink:0;color:#2d7a2d">&#10004;</span>
           <span class="batch-row-name">${esc(data.partName || file.name)}</span>
@@ -826,7 +870,12 @@
     document.querySelectorAll('#batch-list .batch-row').forEach(r => r.classList.remove('active'));
     const rows = document.querySelectorAll('#batch-list .batch-row');
     if (rows[i]) rows[i].classList.add('active');
-    if (batchResults[i] && batchResults[i].data) populateTraveler(batchResults[i].data);
+    const r = batchResults[i];
+    if (r && r.data) {
+      populateTraveler(r.data);
+      if (r.imageDataUrl) showImagePanel(r.imageDataUrl);
+      else hideImagePanel();
+    }
   }
 
   // ── Assembly Packet mode ─────────────────────────────────────────────────
@@ -851,8 +900,9 @@
       const imageDataList = await Promise.all(files.map(async f => {
         const dataUrl = await readFileAsDataURL(f);
         const [meta, b64] = dataUrl.split(',');
-        return { base64: b64, mediaType: meta.match(/:(.*?);/)[1] };
+        return { base64: b64, mediaType: meta.match(/:(.*?);/)[1], dataUrl };
       }));
+      packetImageDataUrls = imageDataList.map(img => img.dataUrl);
 
       setStatus('Decomposing assembly packet…', 'loading');
       const bomData = await extractBOMFromImages(apiKey, imageDataList);
@@ -955,7 +1005,12 @@
     const node = document.querySelector('#bom-tree .bom-node[data-pn="' + CSS.escape(pn) + '"]');
     if (node) node.classList.add('active');
     const item = allItems.find(i => i.partNumber === pn);
-    if (item) populateTraveler(item);
+    if (item) {
+      populateTraveler(item);
+      const idx = item.sourceImageIndex;
+      if (idx != null && packetImageDataUrls[idx]) showImagePanel(packetImageDataUrls[idx]);
+      else hideImagePanel();
+    }
   }
 
   // ── Exit / reset ─────────────────────────────────────────────────────────
@@ -969,8 +1024,10 @@
     workspace.classList.remove('side-by-side');
     document.getElementById('print-all-btn').style.display = 'none';
     document.getElementById('new-upload-btn').style.display = 'none';
+    hideImagePanel();
     allItems = [];
     batchResults = [];
+    packetImageDataUrls = [];
     activeMode = null;
   }
 
@@ -1286,6 +1343,23 @@ Rules:
     const on = traveler.classList.toggle('simplified');
     btn.textContent = on ? '▣ Full View' : '▣ Simplified View';
     btn.classList.toggle('active', on);
+  }
+
+  // ── Image panel ──────────────────────────────────────────────────────────
+  function showImagePanel(dataUrl) {
+    const panel = document.getElementById('image-panel');
+    const img   = document.getElementById('image-panel-img');
+    img.classList.remove('zoomed');
+    img.src = dataUrl;
+    panel.style.display = '';
+  }
+
+  function hideImagePanel() {
+    const panel = document.getElementById('image-panel');
+    const img   = document.getElementById('image-panel-img');
+    panel.style.display = 'none';
+    img.src = '';
+    img.classList.remove('zoomed');
   }
 
   // ── Utilities ────────────────────────────────────────────────────────────
