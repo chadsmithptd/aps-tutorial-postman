@@ -478,11 +478,39 @@
     object-position: top;
     cursor: zoom-in;
   }
-  #image-panel-img.zoomed {
-    max-height: none;
-    object-fit: unset;
+
+  /* Lightbox overlay */
+  #image-lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
     cursor: zoom-out;
   }
+  #image-lightbox.open { display: flex; }
+  #image-lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    cursor: default;
+  }
+  #lightbox-close {
+    position: fixed;
+    top: 16px;
+    right: 24px;
+    color: #fff;
+    font-size: 36px;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0.8;
+  }
+  #lightbox-close:hover { opacity: 1; }
 
   /* Print All container */
   #print-all-container { display: none; }
@@ -714,13 +742,19 @@
   <!-- Blueprint image preview (right of traveler, shown on item selection) -->
   <div id="image-panel">
     <div class="image-panel-header">Blueprint</div>
-    <img id="image-panel-img" src="" alt="Blueprint" onclick="this.classList.toggle('zoomed')">
+    <img id="image-panel-img" src="" alt="Blueprint" onclick="openLightbox()">
   </div>
 
 </div><!-- /#main-workspace -->
 
 <!-- Print All container (hidden; shown during Print All via body class) -->
 <div id="print-all-container"></div>
+
+<!-- Lightbox overlay -->
+<div id="image-lightbox" onclick="closeLightbox()">
+  <span id="lightbox-close" onclick="closeLightbox()">&times;</span>
+  <img id="lightbox-img" src="" alt="Blueprint" onclick="event.stopPropagation()">
+</div>
 
 <script>
   const fileInput    = document.getElementById('file-input');
@@ -1347,20 +1381,28 @@ Rules:
 
   // ── Image panel ──────────────────────────────────────────────────────────
   function showImagePanel(dataUrl) {
-    const panel = document.getElementById('image-panel');
-    const img   = document.getElementById('image-panel-img');
-    img.classList.remove('zoomed');
-    img.src = dataUrl;
-    panel.style.display = 'block';
+    document.getElementById('image-panel-img').src = dataUrl;
+    document.getElementById('image-panel').style.display = 'block';
   }
 
   function hideImagePanel() {
-    const panel = document.getElementById('image-panel');
-    const img   = document.getElementById('image-panel-img');
-    panel.style.display = 'none';
-    img.src = '';
-    img.classList.remove('zoomed');
+    document.getElementById('image-panel').style.display = 'none';
+    document.getElementById('image-panel-img').src = '';
+    closeLightbox();
   }
+
+  function openLightbox() {
+    const src = document.getElementById('image-panel-img').src;
+    if (!src) return;
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('image-lightbox').classList.add('open');
+  }
+
+  function closeLightbox() {
+    document.getElementById('image-lightbox').classList.remove('open');
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 
   // ── Utilities ────────────────────────────────────────────────────────────
   function calcCost(usage) {
