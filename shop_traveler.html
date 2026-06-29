@@ -1113,7 +1113,10 @@
     document.querySelectorAll('#bom-tree .bom-node').forEach(n => n.classList.remove('active'));
     const node = document.querySelector('#bom-tree .bom-node[data-pn="' + CSS.escape(item.partNumber || '') + '"]');
     if (node) node.classList.add('active');
-    showVendorPanel(item);
+    const href = showVendorPanel(item);
+    if (href && (item.vendor || '').toLowerCase().includes('mcmaster')) {
+      window.open(href, '_blank', 'noopener');
+    }
   }
 
   function showVendorPanel(item) {
@@ -1121,7 +1124,7 @@
     const vendor = item.vendor || '';
     let href, linkClass;
     if (vendor.toLowerCase().includes('mcmaster')) {
-      href = 'https://www.mcmaster.com/#' + encodeURIComponent(query);
+      href = 'https://www.mcmaster.com/search/' + encodeURIComponent(query);
       linkClass = 'vendor-card-link';
     } else {
       const gQuery = vendor ? query + ' ' + vendor : query;
@@ -1143,6 +1146,7 @@
     document.getElementById('vendor-card').style.display     = 'block';
     document.getElementById('image-panel-header').textContent = 'Purchase Item';
     document.getElementById('image-panel').style.display     = 'block';
+    return href;
   }
 
   // ── Exit / reset ─────────────────────────────────────────────────────────
