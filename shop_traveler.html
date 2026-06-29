@@ -83,6 +83,19 @@
   }
   .btn-print:hover { background: #235e23; }
 
+  .btn-toggle {
+    background: #666;
+    color: #fff;
+  }
+  .btn-toggle:hover { background: #444; }
+  .btn-toggle.active { background: #8b4513; }
+  .btn-toggle.active:hover { background: #6b3410; }
+
+  /* ── Simplified view ── */
+  .traveler.simplified .ops-section,
+  .traveler.simplified .notes-section,
+  .traveler.simplified .record-footer { display: none; }
+
   #file-input { display: none; }
 
   .upload-status {
@@ -241,7 +254,7 @@
 
   .footer {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     border-top: 2px solid #000;
     background: #f4f4f4;
   }
@@ -282,6 +295,9 @@
   <button class="btn btn-upload" id="upload-btn" onclick="document.getElementById('file-input').click()">
     &#8593; Upload Blueprint
   </button>
+  <button class="btn btn-toggle" id="toggle-btn" onclick="toggleSimplified()">
+    &#9638; Simplified View
+  </button>
   <button class="btn btn-print" onclick="window.print()">
     &#128438; Print
   </button>
@@ -302,8 +318,8 @@
       <div class="value-xl" id="wo-number">—</div>
     </div>
     <div class="header-cell">
-      <div class="label">Status</div>
-      <div style="margin-top:6px;"><span class="status-badge" id="wo-status">—</span></div>
+      <div class="label">Approved Print</div>
+      <div class="value" style="margin-top:6px; font-size:12px;" id="approved-print">—</div>
     </div>
     <div class="header-cell">
       <div class="label">WO Must Leave By</div>
@@ -377,12 +393,8 @@
     <div style="margin-top:6px; min-height:40px; font-size:12px;" id="job-notes"></div>
   </div>
 
-  <div class="footer">
-    <div class="footer-cell">
-      <div class="label">Approved Print</div>
-      <div class="value" style="font-size:11px; margin-top:3px;" id="approved-print">—</div>
-    </div>
-    <div class="footer-cell">
+  <div class="footer record-footer">
+    <div class="footer-cell" style="grid-column: 1 / -1;">
       <div class="label">Record Created / Modified</div>
       <div style="font-size:10px; color:#555; margin-top:3px;" id="record-info">—</div>
     </div>
@@ -442,6 +454,14 @@
       uploadBtn.disabled = false;
     }
   });
+
+  function toggleSimplified() {
+    const traveler = document.getElementById('traveler');
+    const btn = document.getElementById('toggle-btn');
+    const on = traveler.classList.toggle('simplified');
+    btn.textContent = on ? '▣ Full View' : '▣ Simplified View';
+    btn.classList.toggle('active', on);
+  }
 
   function readFileAsDataURL(file) {
     return new Promise((resolve, reject) => {
