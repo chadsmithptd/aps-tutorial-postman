@@ -14,12 +14,11 @@
     padding: 20px;
   }
 
-  /* ── Toolbar ── */
   .toolbar {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     background: #fff;
     padding: 12px 16px;
     border-radius: 6px;
@@ -68,45 +67,67 @@
     cursor: pointer;
     border: none;
     transition: background 0.15s;
+    white-space: nowrap;
   }
 
-  .btn-upload {
-    background: #1a5fa8;
-    color: #fff;
-  }
+  .btn-upload  { background: #1a5fa8; color: #fff; }
   .btn-upload:hover { background: #154d8a; }
   .btn-upload:disabled { background: #7a9ec8; cursor: not-allowed; }
 
-  .btn-print {
-    background: #2d7a2d;
-    color: #fff;
-  }
+  .btn-print   { background: #2d7a2d; color: #fff; }
   .btn-print:hover { background: #235e23; }
 
-  .btn-toggle {
-    background: #666;
-    color: #fff;
-  }
+  .btn-print-all { background: #2d7a2d; color: #fff; }
+  .btn-print-all:hover { background: #235e23; }
+
+  .btn-new-upload { background: #888; color: #fff; }
+  .btn-new-upload:hover { background: #666; }
+
+  .btn-toggle  { background: #666; color: #fff; }
   .btn-toggle:hover { background: #444; }
   .btn-toggle.active { background: #8b4513; }
-  .btn-toggle.active:hover { background: #6b3410; }
 
-  /* ── Simplified view ── */
-  .traveler.simplified .ops-section,
-  .traveler.simplified .notes-section,
-  .traveler.simplified .record-footer { display: none; }
-
-  /* ── Override panel ── */
-  .btn-override {
-    background: #5a5a8a;
-    color: #fff;
-  }
+  .btn-override { background: #5a5a8a; color: #fff; }
   .btn-override:hover { background: #444470; }
   .btn-override.active { background: #3a3a6a; }
 
+  .btn-mode-batch  { background: #4a7c3f; color: #fff; padding: 8px 18px; }
+  .btn-mode-batch:hover { background: #3a6030; }
+
+  .btn-mode-packet { background: #1a5fa8; color: #fff; padding: 8px 18px; }
+  .btn-mode-packet:hover { background: #154d8a; }
+
+  .upload-status { font-size: 11px; color: #888; font-style: italic; }
+  .upload-status.loading { color: #1a5fa8; font-style: normal; font-weight: bold; }
+  .upload-status.error   { color: #c00;    font-style: normal; font-weight: bold; }
+  .upload-status.success { color: #2d7a2d; font-style: normal; font-weight: bold; }
+
+  /* Mode prompt */
+  #mode-prompt {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    background: #fff;
+    border: 1px solid #c8a800;
+    border-left: 4px solid #c8a800;
+    border-radius: 6px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    flex-wrap: wrap;
+  }
+
+  #mode-prompt-msg {
+    font-size: 13px;
+    font-weight: bold;
+    color: #555;
+    flex: 1;
+  }
+
+  /* Override panel */
   #override-panel {
     display: none;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     background: #fff;
     border: 1px solid #aac;
     border-left: 4px solid #5a5a8a;
@@ -150,6 +171,7 @@
     color: #000;
     resize: vertical;
   }
+
   .override-field input:focus,
   .override-field textarea:focus {
     outline: none;
@@ -159,25 +181,10 @@
 
   .override-wide { grid-column: span 2; }
 
-  @media print {
-    #override-panel { display: none !important; }
-  }
-
-  #file-input { display: none; }
-
-  .upload-status {
-    font-size: 11px;
-    color: #888;
-    font-style: italic;
-  }
-  .upload-status.loading { color: #1a5fa8; font-style: normal; font-weight: bold; }
-  .upload-status.error   { color: #c00;    font-style: normal; font-weight: bold; }
-  .upload-status.success { color: #2d7a2d; font-style: normal; font-weight: bold; }
-
-  /* ── Preview panel ── */
+  /* Preview panel */
   #preview-panel {
     display: none;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     background: #fff;
     border: 1px solid #ccc;
     border-radius: 6px;
@@ -202,11 +209,127 @@
     display: block;
   }
 
-  /* ── Traveler ── */
+  /* Main workspace */
+  #main-workspace { display: block; }
+  #main-workspace.side-by-side {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  /* Batch panel */
+  #batch-panel {
+    display: none;
+    width: 260px;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+
+  .batch-header {
+    background: #222;
+    color: #fff;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  #batch-list { overflow-y: auto; max-height: 600px; }
+
+  .batch-row {
+    padding: 8px 12px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #f0f0f0;
+    user-select: none;
+  }
+  .batch-row.ready   { cursor: pointer; }
+  .batch-row.ready:hover { background: #eef3fa; }
+  .batch-row.active  { background: #1a5fa8; color: #fff; }
+  .batch-row.has-error { color: #c00; }
+
+  .batch-row-name { font-weight: bold; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .batch-row-pn   { font-size: 9px; color: #888; flex-shrink: 0; }
+  .batch-row.active .batch-row-pn { color: #aad; }
+
+  /* BOM panel */
+  #bom-panel {
+    display: none;
+    width: 260px;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+
+  .bom-header {
+    background: #222;
+    color: #fff;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  #bom-packet-title {
+    display: block;
+    font-size: 10px;
+    font-weight: normal;
+    color: #aaa;
+    margin-top: 2px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  #bom-tree { overflow-y: auto; max-height: 600px; }
+
+  .bom-node {
+    padding: 6px 10px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid #f0f0f0;
+    user-select: none;
+  }
+  .bom-node.clickable { cursor: pointer; }
+  .bom-node.clickable:hover { background: #eef3fa; }
+  .bom-node.active    { background: #1a5fa8; color: #fff; }
+  .bom-node.purchase  { color: #999; font-style: italic; cursor: default; }
+
+  .bom-toggle {
+    font-size: 9px;
+    width: 12px;
+    flex-shrink: 0;
+    color: #888;
+  }
+  .bom-node.active .bom-toggle { color: #aad; }
+
+  .bom-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .bom-pn {
+    font-size: 9px;
+    color: #888;
+    flex-shrink: 0;
+  }
+  .bom-node.active .bom-pn { color: #aad; }
+
+  /* Traveler */
   .traveler {
     width: 8.5in;
     border: 2px solid #000;
     background: #fff;
+    flex-shrink: 0;
   }
 
   .header {
@@ -234,19 +357,6 @@
   .value-large { font-size: 22px; font-weight: bold; }
   .value-xl    { font-size: 28px; font-weight: bold; }
 
-  .status-badge {
-    display: inline-block;
-    background: #2d7a2d;
-    color: #fff;
-    font-weight: bold;
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 2px;
-  }
-
   .due-alert {
     color: #c00;
     border: 1px solid #c00;
@@ -263,7 +373,6 @@
     border-bottom: 2px solid #000;
     background: #f4f4f4;
   }
-
   .part-bar .header-cell { border-right: 1px solid #000; }
 
   .material-row {
@@ -279,9 +388,7 @@
   .material-cell:last-child { border-right: none; }
 
   .ops-table { width: 100%; border-collapse: collapse; }
-
   .ops-table thead tr { background: #222; color: #fff; }
-
   .ops-table th {
     padding: 6px 8px;
     text-align: left;
@@ -292,7 +399,6 @@
     border-right: 1px solid #555;
   }
   .ops-table th:last-child { border-right: none; }
-
   .ops-table td {
     padding: 7px 8px;
     border-bottom: 1px solid #ccc;
@@ -300,12 +406,12 @@
     font-size: 11px;
     vertical-align: middle;
   }
-  .ops-table td:last-child  { border-right: none; }
+  .ops-table td:last-child { border-right: none; }
   .ops-table tr:last-child td { border-bottom: none; }
   .ops-table tr:nth-child(even) { background: #f9f9f9; }
 
-  .op-num        { font-weight: bold; color: #1a5fa8; font-size: 12px; }
-  .complete-check { color: #2d7a2d; font-size: 14px; font-weight: bold; }
+  .op-num { font-weight: bold; color: #1a5fa8; font-size: 12px; }
+  .resource { color: #1a5fa8; font-size: 10px; font-weight: bold; }
 
   .due-cell {
     color: #c00;
@@ -316,8 +422,6 @@
     border-radius: 3px;
     display: inline-block;
   }
-
-  .resource { color: #1a5fa8; font-size: 10px; font-weight: bold; }
 
   .footer {
     display: grid;
@@ -338,14 +442,30 @@
     min-height: 60px;
   }
 
-  /* ── Print ── */
+  /* Simplified view */
+  .traveler.simplified .ops-section,
+  .traveler.simplified .notes-section,
+  .traveler.simplified .record-footer { display: none; }
+
+  /* Print All container */
+  #print-all-container { display: none; }
+
+  /* Print */
   @media print {
     body { background: #fff; padding: 0; }
-    .toolbar, #preview-panel { display: none !important; }
+    .toolbar, #preview-panel, #override-panel, #mode-prompt { display: none !important; }
+    #batch-panel, #bom-panel { display: none !important; }
+    #main-workspace { display: block !important; }
     .traveler { width: 100%; border: 2px solid #000; }
-    .status-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .ops-table thead tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    body.printing-all #traveler { display: none !important; }
+    body.printing-all #print-all-container { display: block !important; }
+    #print-all-container .traveler { width: 100%; page-break-before: always; }
+    #print-all-container .traveler:first-child { page-break-before: auto; }
   }
+
+  #file-input { display: none; }
 </style>
 </head>
 <body>
@@ -358,9 +478,15 @@
     <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off">
   </div>
   <span class="upload-status" id="upload-status">No blueprint loaded</span>
-  <input type="file" id="file-input" accept="image/*">
+  <input type="file" id="file-input" accept="image/*" multiple>
   <button class="btn btn-upload" id="upload-btn" onclick="document.getElementById('file-input').click()">
-    &#8593; Upload Blueprint
+    &#8593; Upload Blueprint(s)
+  </button>
+  <button class="btn btn-print-all" id="print-all-btn" style="display:none;" onclick="printAllTravelers()">
+    &#128438; Print All
+  </button>
+  <button class="btn btn-new-upload" id="new-upload-btn" style="display:none;" onclick="exitMode()">
+    &#8635; New Upload
   </button>
   <button class="btn btn-override" id="override-btn" onclick="toggleOverride()">
     &#9998; Edit Fields
@@ -373,11 +499,17 @@
   </button>
 </div>
 
-<!-- Override Panel -->
-<div id="override-panel">
-  <div class="override-title">&#9998; Field Overrides — correct any misread values below</div>
-  <div class="override-grid">
+<!-- Mode prompt (2+ files selected) -->
+<div id="mode-prompt">
+  <span id="mode-prompt-msg"></span>
+  <button class="btn btn-mode-batch" onclick="startBatchMode()">&#128295; Independent Travelers</button>
+  <button class="btn btn-mode-packet" onclick="startPacketMode()">&#128230; Assembly Packet</button>
+</div>
 
+<!-- Override panel -->
+<div id="override-panel">
+  <div class="override-title">&#9998; Field Overrides &mdash; correct any misread values below</div>
+  <div class="override-grid">
     <div class="override-field">
       <label>Work Order #</label>
       <input type="text" data-target="wo-number" placeholder="e.g. 26-0042">
@@ -394,7 +526,6 @@
       <label>Customer Due</label>
       <input type="text" data-target="customer-due" placeholder="mm/dd/yyyy">
     </div>
-
     <div class="override-field override-wide">
       <label>Part Name</label>
       <input type="text" data-target="part-name" placeholder="Part name">
@@ -407,7 +538,6 @@
       <label>Rev</label>
       <input type="text" data-target="part-rev" placeholder="e.g. 01">
     </div>
-
     <div class="override-field">
       <label>Qty Ordered</label>
       <input type="text" data-target="qty-ordered" placeholder="e.g. 40">
@@ -422,120 +552,147 @@
     </div>
     <div class="override-field override-wide">
       <label>Outside Processing</label>
-      <textarea data-target="outside-processing" rows="2" placeholder="e.g. Anodize — Upstate Anodize LLC"></textarea>
+      <textarea data-target="outside-processing" rows="2" placeholder="e.g. Anodize"></textarea>
     </div>
-
   </div>
 </div>
 
-<!-- Blueprint Preview -->
+<!-- Blueprint preview (single mode) -->
 <div id="preview-panel">
   <p>Uploaded Screenshot</p>
   <img id="preview-img" src="" alt="Uploaded screenshot">
 </div>
 
-<!-- Traveler Document -->
-<div class="traveler" id="traveler">
+<!-- Main workspace -->
+<div id="main-workspace">
 
-  <div class="header">
-    <div class="header-cell">
-      <div class="label">Work Order #</div>
-      <div class="value-xl" id="wo-number">—</div>
-    </div>
-    <div class="header-cell">
-      <div class="label">Approved Print</div>
-      <div class="value" style="margin-top:6px; font-size:12px;" id="approved-print">—</div>
-    </div>
-    <div class="header-cell">
-      <div class="label">WO Must Leave By</div>
-      <div class="due-alert" id="wo-must-leave">—</div>
-    </div>
-    <div class="header-cell">
-      <div class="label">Customer Due</div>
-      <div class="value" id="customer-due">—</div>
-    </div>
+  <!-- Batch panel -->
+  <div id="batch-panel">
+    <div class="batch-header">Independent Travelers (<span id="batch-count">0</span>)</div>
+    <div id="batch-list"></div>
   </div>
 
-  <div class="part-bar">
-    <div class="header-cell">
-      <div class="label">Part Name</div>
-      <div class="value-large" id="part-name">—</div>
+  <!-- BOM panel -->
+  <div id="bom-panel">
+    <div class="bom-header">
+      Bill of Materials
+      <span id="bom-packet-title"></span>
     </div>
-    <div class="header-cell">
-      <div class="label">Part Number</div>
-      <div class="value" id="part-number">—</div>
-    </div>
-    <div class="header-cell">
-      <div class="label">Rev</div>
-      <div class="value-large" style="text-align:center;" id="part-rev">—</div>
-    </div>
-    <div class="header-cell" style="display:grid;grid-template-columns:1fr 1fr;">
-      <div>
-        <div class="label">Qty Ordered</div>
-        <div class="value-large" style="text-align:center;" id="qty-ordered">—</div>
+    <div id="bom-tree"></div>
+  </div>
+
+  <!-- Traveler document -->
+  <div class="traveler" id="traveler">
+
+    <div class="header">
+      <div class="header-cell">
+        <div class="label">Work Order #</div>
+        <div class="value-xl" id="wo-number">&mdash;</div>
       </div>
-      <div>
-        <div class="label">Raw Stock Qty</div>
-        <div class="value-large" style="text-align:center;" id="raw-stock-qty">—</div>
+      <div class="header-cell">
+        <div class="label">Approved Print</div>
+        <div class="value" style="margin-top:6px;font-size:12px;" id="approved-print">&mdash;</div>
+      </div>
+      <div class="header-cell">
+        <div class="label">WO Must Leave By</div>
+        <div class="due-alert" id="wo-must-leave">&mdash;</div>
+      </div>
+      <div class="header-cell">
+        <div class="label">Customer Due</div>
+        <div class="value" id="customer-due">&mdash;</div>
       </div>
     </div>
-  </div>
 
-  <div class="material-row">
-    <div class="material-cell">
-      <div class="label">Material / Part Stock</div>
-      <div class="value" style="font-size:12px; margin-top:4px;" id="material">—</div>
+    <div class="part-bar">
+      <div class="header-cell">
+        <div class="label">Part Name</div>
+        <div class="value-large" id="part-name">&mdash;</div>
+      </div>
+      <div class="header-cell">
+        <div class="label">Part Number</div>
+        <div class="value" id="part-number">&mdash;</div>
+      </div>
+      <div class="header-cell">
+        <div class="label">Rev</div>
+        <div class="value-large" style="text-align:center;" id="part-rev">&mdash;</div>
+      </div>
+      <div class="header-cell" style="display:grid;grid-template-columns:1fr 1fr;">
+        <div>
+          <div class="label">Qty Ordered</div>
+          <div class="value-large" style="text-align:center;" id="qty-ordered">&mdash;</div>
+        </div>
+        <div>
+          <div class="label">Raw Stock Qty</div>
+          <div class="value-large" style="text-align:center;" id="raw-stock-qty">&mdash;</div>
+        </div>
+      </div>
     </div>
-    <div class="material-cell">
-      <div class="label">Outside Processing</div>
-      <div class="value" style="font-size:12px; margin-top:4px;" id="outside-processing">—</div>
+
+    <div class="material-row">
+      <div class="material-cell">
+        <div class="label">Material / Part Stock</div>
+        <div class="value" style="font-size:12px;margin-top:4px;" id="material">&mdash;</div>
+      </div>
+      <div class="material-cell">
+        <div class="label">Outside Processing</div>
+        <div class="value" style="font-size:12px;margin-top:4px;" id="outside-processing">&mdash;</div>
+      </div>
     </div>
-  </div>
 
-  <div class="ops-section">
-    <table class="ops-table">
-      <thead>
-        <tr>
-          <th>Op #</th>
-          <th>Operation</th>
-          <th>Resource</th>
-          <th style="text-align:center;">Complete</th>
-          <th>Notes / Due</th>
-        </tr>
-      </thead>
-      <tbody id="ops-tbody">
-        <tr>
-          <td colspan="5" style="text-align:center; color:#888; padding:20px; font-style:italic;">
-            Upload a blueprint to generate operations routing
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="notes-section">
-    <div class="label">Job Notes</div>
-    <div style="margin-top:6px; min-height:40px; font-size:12px;" id="job-notes"></div>
-  </div>
-
-  <div class="footer record-footer">
-    <div class="footer-cell" style="grid-column: 1 / -1;">
-      <div class="label">Record Created / Modified</div>
-      <div style="font-size:10px; color:#555; margin-top:3px;" id="record-info">—</div>
+    <div class="ops-section">
+      <table class="ops-table">
+        <thead>
+          <tr>
+            <th>Op #</th>
+            <th>Operation</th>
+            <th>Resource</th>
+            <th style="text-align:center;">Complete</th>
+            <th>Notes / Due</th>
+          </tr>
+        </thead>
+        <tbody id="ops-tbody">
+          <tr>
+            <td colspan="5" style="text-align:center;color:#888;padding:20px;font-style:italic;">
+              Upload a blueprint to generate operations routing
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-  </div>
 
-</div>
+    <div class="notes-section">
+      <div class="label">Job Notes</div>
+      <div style="margin-top:6px;min-height:40px;font-size:12px;" id="job-notes"></div>
+    </div>
+
+    <div class="footer record-footer">
+      <div class="footer-cell" style="grid-column:1/-1;">
+        <div class="label">Record Created / Modified</div>
+        <div style="font-size:10px;color:#555;margin-top:3px;" id="record-info">&mdash;</div>
+      </div>
+    </div>
+
+  </div><!-- /.traveler -->
+
+</div><!-- /#main-workspace -->
+
+<!-- Print All container (hidden; shown during Print All via body class) -->
+<div id="print-all-container"></div>
 
 <script>
-  const fileInput   = document.getElementById('file-input');
+  const fileInput    = document.getElementById('file-input');
   const previewPanel = document.getElementById('preview-panel');
-  const previewImg  = document.getElementById('preview-img');
+  const previewImg   = document.getElementById('preview-img');
   const uploadStatus = document.getElementById('upload-status');
-  const uploadBtn   = document.getElementById('upload-btn');
-  const apiKeyInput = document.getElementById('api-key-input');
+  const uploadBtn    = document.getElementById('upload-btn');
+  const apiKeyInput  = document.getElementById('api-key-input');
+  const workspace    = document.getElementById('main-workspace');
 
-  // Persist API key across page loads
+  let pendingFiles = [];
+  let allItems     = [];   // packet mode
+  let batchResults = [];   // batch mode [{data, error}]
+  let activeMode   = null; // 'single'|'batch'|'packet'
+
   apiKeyInput.value = localStorage.getItem('anthropic_api_key') || '';
   apiKeyInput.addEventListener('change', () => {
     localStorage.setItem('anthropic_api_key', apiKeyInput.value.trim());
@@ -546,85 +703,282 @@
     uploadStatus.className = 'upload-status' + (type ? ' ' + type : '');
   }
 
-  fileInput.addEventListener('change', async function () {
-    const file = this.files[0];
-    if (!file) return;
+  // ── File selection dispatcher ────────────────────────────────────────────
+  fileInput.addEventListener('change', function () {
+    const files = Array.from(this.files);
+    this.value = ''; // allow re-selection of same files
+    if (!files.length) return;
 
     const apiKey = apiKeyInput.value.trim() || localStorage.getItem('anthropic_api_key') || '';
-    if (!apiKey) {
-      setStatus('Enter your Anthropic API key first.', 'error');
-      return;
+    if (!apiKey) { setStatus('Enter your Anthropic API key first.', 'error'); return; }
+
+    if (files.length === 1) {
+      handleSingleFile(files[0], apiKey);
+    } else {
+      pendingFiles = files;
+      document.getElementById('mode-prompt-msg').textContent =
+        files.length + ' blueprints selected. How should these be processed?';
+      document.getElementById('mode-prompt').style.display = 'flex';
+      setStatus(files.length + ' files ready — choose a processing mode above.', '');
     }
+  });
+
+  // ── Single file (unchanged flow) ─────────────────────────────────────────
+  async function handleSingleFile(file, apiKey) {
+    exitMode();
+    activeMode = 'single';
 
     const dataUrl = await readFileAsDataURL(file);
     previewImg.src = dataUrl;
     previewPanel.style.display = 'block';
 
-    const [meta, base64] = dataUrl.split(',');
+    const [meta, b64] = dataUrl.split(',');
     const mediaType = meta.match(/:(.*?);/)[1];
 
     setStatus('Analyzing blueprint…', 'loading');
     uploadBtn.disabled = true;
 
     try {
-      const data = await extractFromImage(apiKey, base64, mediaType);
+      const data = await extractFromImage(apiKey, b64, mediaType);
       populateTraveler(data);
       const cost = calcCost(data._usage);
-      const costNote = cost !== null ? `  (${cost})` : '';
-      setStatus('Routing generated from ' + file.name + costNote, 'success');
+      setStatus('Routing generated from ' + file.name + (cost ? '  (' + cost + ')' : ''), 'success');
     } catch (err) {
       setStatus('Error: ' + err.message, 'error');
-      console.error(err);
     } finally {
       uploadBtn.disabled = false;
     }
-  });
-
-  function toggleOverride() {
-    const panel = document.getElementById('override-panel');
-    const btn   = document.getElementById('override-btn');
-    const show  = panel.style.display === 'none' || panel.style.display === '';
-    panel.style.display = show ? 'block' : 'none';
-    btn.classList.toggle('active', show);
-    btn.textContent = show ? '✘ Close Overrides' : '✎ Edit Fields';
   }
 
-  // Live-bind override inputs → traveler fields
-  document.querySelectorAll('#override-panel [data-target]').forEach(el => {
-    el.addEventListener('input', function () {
-      const target = document.getElementById(this.dataset.target);
-      if (target) target.textContent = this.value.trim() || '—';
-    });
-  });
+  // ── Batch mode ───────────────────────────────────────────────────────────
+  async function startBatchMode() {
+    const files = pendingFiles;
+    pendingFiles = [];
+    hideModePrompt();
+    exitMode();
+    activeMode = 'batch';
 
-  // Sync override inputs from current traveler DOM values
-  function syncOverrides() {
-    document.querySelectorAll('#override-panel [data-target]').forEach(el => {
-      const target = document.getElementById(el.dataset.target);
-      if (target) {
-        const val = target.textContent;
-        el.value = val === '—' ? '' : val;
+    const apiKey = apiKeyInput.value.trim() || localStorage.getItem('anthropic_api_key') || '';
+    batchResults = new Array(files.length).fill(null);
+
+    const batchPanel = document.getElementById('batch-panel');
+    const batchList  = document.getElementById('batch-list');
+    document.getElementById('batch-count').textContent = files.length;
+    batchPanel.style.display = 'block';
+    workspace.classList.add('side-by-side');
+    document.getElementById('new-upload-btn').style.display = '';
+
+    // Create placeholder rows
+    const rows = files.map((file, i) => {
+      const row = document.createElement('div');
+      row.className = 'batch-row';
+      row.innerHTML = `<span style="flex-shrink:0">&#9203;</span>
+        <span class="batch-row-name">${esc(file.name)}</span>
+        <span class="batch-row-pn"></span>`;
+      batchList.appendChild(row);
+      return row;
+    });
+
+    setStatus('Processing ' + files.length + ' blueprints…', 'loading');
+    uploadBtn.disabled = true;
+
+    let done = 0, errCount = 0;
+
+    const promises = files.map(async (file, i) => {
+      try {
+        const dataUrl = await readFileAsDataURL(file);
+        const [meta, b64] = dataUrl.split(',');
+        const mediaType = meta.match(/:(.*?);/)[1];
+        const data = await extractFromImage(apiKey, b64, mediaType);
+        batchResults[i] = { data };
+        rows[i].className = 'batch-row ready';
+        rows[i].innerHTML = `<span style="flex-shrink:0;color:#2d7a2d">&#10004;</span>
+          <span class="batch-row-name">${esc(data.partName || file.name)}</span>
+          <span class="batch-row-pn">${esc(data.partNumber || '')}</span>`;
+        rows[i].addEventListener('click', () => selectBatchItem(i));
+        done++;
+      } catch (err) {
+        batchResults[i] = { error: err.message };
+        rows[i].className = 'batch-row has-error';
+        rows[i].innerHTML = `<span style="flex-shrink:0">&#10007;</span>
+          <span class="batch-row-name">${esc(file.name)}</span>
+          <span class="batch-row-pn" style="color:#c00">error</span>`;
+        errCount++;
       }
+      const remaining = files.length - done - errCount;
+      if (remaining > 0) setStatus(remaining + ' remaining…', 'loading');
     });
+
+    await Promise.all(promises);
+    uploadBtn.disabled = false;
+
+    const errMsg = errCount ? `, ${errCount} failed` : '';
+    setStatus(`${done} travelers ready${errMsg}.`, errCount && !done ? 'error' : 'success');
+
+    const firstGood = batchResults.findIndex(r => r && r.data);
+    if (firstGood >= 0) {
+      document.getElementById('print-all-btn').style.display = '';
+      selectBatchItem(firstGood);
+    }
   }
 
-  function toggleSimplified() {
-    const traveler = document.getElementById('traveler');
-    const btn = document.getElementById('toggle-btn');
-    const on = traveler.classList.toggle('simplified');
-    btn.textContent = on ? '▣ Full View' : '▣ Simplified View';
-    btn.classList.toggle('active', on);
+  function selectBatchItem(i) {
+    document.querySelectorAll('#batch-list .batch-row').forEach(r => r.classList.remove('active'));
+    const rows = document.querySelectorAll('#batch-list .batch-row');
+    if (rows[i]) rows[i].classList.add('active');
+    if (batchResults[i] && batchResults[i].data) populateTraveler(batchResults[i].data);
   }
 
-  function readFileAsDataURL(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  // ── Assembly Packet mode ─────────────────────────────────────────────────
+  async function startPacketMode() {
+    const files = pendingFiles;
+    pendingFiles = [];
+    hideModePrompt();
+    exitMode();
+    activeMode = 'packet';
+
+    const apiKey = apiKeyInput.value.trim() || localStorage.getItem('anthropic_api_key') || '';
+
+    if (files.length > 20) {
+      setStatus('Assembly Packet is limited to 20 images. Select 20 or fewer files.', 'error');
+      return;
+    }
+
+    setStatus('Reading ' + files.length + ' blueprints…', 'loading');
+    uploadBtn.disabled = true;
+
+    try {
+      const imageDataList = await Promise.all(files.map(async f => {
+        const dataUrl = await readFileAsDataURL(f);
+        const [meta, b64] = dataUrl.split(',');
+        return { base64: b64, mediaType: meta.match(/:(.*?);/)[1] };
+      }));
+
+      setStatus('Decomposing assembly packet…', 'loading');
+      const bomData = await extractBOMFromImages(apiKey, imageDataList);
+      enterPacketMode(bomData, files.length);
+    } catch (err) {
+      setStatus('Error: ' + err.message, 'error');
+    } finally {
+      uploadBtn.disabled = false;
+    }
   }
 
+  function enterPacketMode(bomData, fileCount) {
+    allItems = bomData.items || [];
+
+    document.getElementById('bom-panel').style.display = 'block';
+    workspace.classList.add('side-by-side');
+    document.getElementById('new-upload-btn').style.display = '';
+
+    const printable = allItems.filter(i => i.type !== 'purchase');
+    if (printable.length) document.getElementById('print-all-btn').style.display = '';
+
+    renderBOMTree(bomData);
+
+    const cost = calcCost(bomData._usage);
+    setStatus(
+      `Packet decomposed: ${allItems.length} items across ${fileCount} drawings.` +
+      (cost ? '  (' + cost + ')' : ''),
+      'success'
+    );
+
+    const first = allItems.find(i => i.type !== 'purchase');
+    if (first) selectBOMItem(first.partNumber);
+  }
+
+  function renderBOMTree(bomData) {
+    document.getElementById('bom-packet-title').textContent = bomData.packetTitle || '';
+    const tree = document.getElementById('bom-tree');
+    tree.innerHTML = '';
+
+    const pnSet = new Set(allItems.map(i => i.partNumber));
+    const roots = allItems.filter(i => !i.parentPartNumber || !pnSet.has(i.parentPartNumber));
+    roots.forEach(item => renderBOMSubtree(item, 0, tree));
+  }
+
+  function renderBOMSubtree(item, depth, container) {
+    const children = allItems.filter(i => i.parentPartNumber === item.partNumber);
+    const hasChildren = children.length > 0;
+    const isPurchase = item.type === 'purchase';
+
+    const node = document.createElement('div');
+    node.className = 'bom-node' + (isPurchase ? ' purchase' : ' clickable');
+    node.dataset.pn = item.partNumber || '';
+    node.style.paddingLeft = (depth * 20 + 10) + 'px';
+
+    const toggleSpan = document.createElement('span');
+    toggleSpan.className = 'bom-toggle';
+    toggleSpan.textContent = hasChildren ? '▼' : ' ';
+
+    const icon = item.type === 'assembly' || item.type === 'sub-assembly' ? '📦'
+               : isPurchase ? '🛒' : '🔧';
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = icon;
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'bom-label';
+    labelSpan.textContent = (item.partName || item.partNumber || '(unknown)') +
+      (item.qtyRequired > 1 ? ' ×' + item.qtyRequired : '');
+
+    const pnSpan = document.createElement('span');
+    pnSpan.className = 'bom-pn';
+    pnSpan.textContent = item.partNumber || '';
+
+    node.append(toggleSpan, iconSpan, labelSpan, pnSpan);
+
+    if (!isPurchase) {
+      node.addEventListener('click', () => selectBOMItem(item.partNumber));
+    }
+
+    container.appendChild(node);
+
+    if (hasChildren) {
+      const childWrap = document.createElement('div');
+      let collapsed = false;
+
+      toggleSpan.style.cursor = 'pointer';
+      toggleSpan.addEventListener('click', e => {
+        e.stopPropagation();
+        collapsed = !collapsed;
+        childWrap.style.display = collapsed ? 'none' : '';
+        toggleSpan.textContent = collapsed ? '▶' : '▼';
+      });
+
+      children.forEach(child => renderBOMSubtree(child, depth + 1, childWrap));
+      container.appendChild(childWrap);
+    }
+  }
+
+  function selectBOMItem(pn) {
+    document.querySelectorAll('#bom-tree .bom-node').forEach(n => n.classList.remove('active'));
+    const node = document.querySelector('#bom-tree .bom-node[data-pn="' + CSS.escape(pn) + '"]');
+    if (node) node.classList.add('active');
+    const item = allItems.find(i => i.partNumber === pn);
+    if (item) populateTraveler(item);
+  }
+
+  // ── Exit / reset ─────────────────────────────────────────────────────────
+  function exitMode() {
+    hideModePrompt();
+    document.getElementById('bom-panel').style.display = 'none';
+    document.getElementById('batch-panel').style.display = 'none';
+    document.getElementById('bom-tree').innerHTML = '';
+    document.getElementById('batch-list').innerHTML = '';
+    previewPanel.style.display = 'none';
+    workspace.classList.remove('side-by-side');
+    document.getElementById('print-all-btn').style.display = 'none';
+    document.getElementById('new-upload-btn').style.display = 'none';
+    allItems = [];
+    batchResults = [];
+    activeMode = null;
+  }
+
+  function hideModePrompt() {
+    document.getElementById('mode-prompt').style.display = 'none';
+  }
+
+  // ── API: single image ────────────────────────────────────────────────────
   async function extractFromImage(apiKey, base64, mediaType) {
     const prompt = `You are a master CNC machining quoter with 25 years of experience in high-precision aerospace and defense manufacturing. Analyze this engineering blueprint and produce a complete manufacturing routing.
 
@@ -674,13 +1028,10 @@ Return raw JSON only, no code fences.`;
       body: JSON.stringify({
         model: 'claude-opus-4-8',
         max_tokens: 2048,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-            { type: 'text', text: prompt }
-          ]
-        }]
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: prompt }
+        ]}]
       })
     });
 
@@ -690,21 +1041,179 @@ Return raw JSON only, no code fences.`;
     }
 
     const result = await resp.json();
-    const text = result.content[0].text.trim();
-    const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-    const data = JSON.parse(clean);
+    const raw = result.content[0].text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    const data = JSON.parse(raw);
     data._usage = result.usage;
     return data;
   }
 
-  function calcCost(usage) {
-    if (!usage) return null;
-    const input  = (usage.input_tokens  || 0) / 1_000_000 * 5.00;
-    const output = (usage.output_tokens || 0) / 1_000_000 * 25.00;
-    const total  = input + output;
-    return total < 0.01 ? '<$0.01' : '$' + total.toFixed(4);
+  // ── API: multi-image BOM decomposition ───────────────────────────────────
+  async function extractBOMFromImages(apiKey, imageDataList) {
+    const n = imageDataList.length;
+
+    const prompt = `You are a master CNC machining quoter and manufacturing engineer with 25 years of experience in aerospace and defense manufacturing.
+
+You have been given a customer blueprint packet containing ${n} drawing${n > 1 ? 's' : ''} (Image 0 through Image ${n - 1}). Fully decompose this packet into a structured bill of materials with complete manufacturing routings.
+
+For EACH IMAGE (referenced by its 0-based position index):
+
+1. Identify the document type: ASSEMBLY DRAWING (shows BOM table), DETAIL DRAWING (single part), or PURCHASE SPEC.
+
+2. Classify each item as:
+   - "assembly": top-level assembly (requires assembly operations)
+   - "sub-assembly": assembled from children (requires assembly operations)
+   - "make": manufactured in-house (requires machining routing)
+   - "purchase": bought item (hardware, bearings, seals, etc.)
+
+3. Assembly/sub-assembly items: generate assembly routing (Resource: ASSEMBLY). Typical ops: stage/verify components, install sub-assemblies by name, torque fasteners, inspect, ship.
+
+4. Make items: generate complete CNC machining routing. Study all views, dimensions, tolerances, GD&T, surface finish. Group by logical setups (one clamping = one op). Sequence: raw stock → rough → finish → grind → outside process. Resources: CNC LATHE | VMC | HMC | SURFACE GRIND | CYLINDRICAL GRIND | EDM | DEBURR | INSPECT | OUTSIDE PROC | SHIP
+
+5. Purchase items: extract vendor/description from BOM table on the assembly drawing.
+
+6. Track parent-child relationships using part numbers from BOM tables.
+   - childPartNumbers: list of part numbers in this item's BOM
+   - parentPartNumber: part number of the assembly this item belongs to (null for top-level)
+
+Return ONLY valid JSON:
+
+{
+  "packetTitle": "",
+  "items": [
+    {
+      "partName": "",
+      "partNumber": "",
+      "revision": "",
+      "type": "assembly",
+      "sourceImageIndex": 0,
+      "qtyRequired": 1,
+      "parentPartNumber": null,
+      "childPartNumbers": [],
+      "material": "",
+      "outsideProcessing": "",
+      "approvedPrint": "",
+      "operations": []
+    }
+  ]
+}
+
+Rules:
+- sourceImageIndex: 0-based index of the image this item came from (null for purchase items not shown as drawings)
+- parentPartNumber: null only for the single top-level assembly
+- Use "" for any field not visible
+- Operation numbering: multiples of 10
+- All make and assembly items must end with INSPECT and SHIP operations
+- Return raw JSON only, no code fences`;
+
+    const content = [
+      ...imageDataList.map(img => ({
+        type: 'image',
+        source: { type: 'base64', media_type: img.mediaType, data: img.base64 }
+      })),
+      { type: 'text', text: prompt }
+    ];
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-8',
+        max_tokens: 32768,
+        messages: [{ role: 'user', content }]
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error((err.error && err.error.message) || 'API error ' + resp.status);
+    }
+
+    const result = await resp.json();
+    const raw = result.content[0].text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    const data = JSON.parse(raw);
+    data._usage = result.usage;
+    return data;
   }
 
+  // ── Print All ────────────────────────────────────────────────────────────
+  function printAllTravelers() {
+    let items = [];
+    if (activeMode === 'packet') {
+      items = allItems.filter(i => i.type !== 'purchase');
+    } else if (activeMode === 'batch') {
+      items = batchResults.filter(r => r && r.data).map(r => r.data);
+    }
+
+    if (!items.length) { window.print(); return; }
+
+    const container = document.getElementById('print-all-container');
+    container.innerHTML = items.map((item, idx) => buildTravelerHTML(item, idx > 0)).join('');
+
+    document.body.classList.add('printing-all');
+    window.print();
+    window.addEventListener('afterprint', function cleanup() {
+      document.body.classList.remove('printing-all');
+      container.innerHTML = '';
+      window.removeEventListener('afterprint', cleanup);
+    });
+  }
+
+  function buildTravelerHTML(d, pageBreak) {
+    const opsRows = (d.operations || []).map(op => {
+      const notes = op.dueDate
+        ? `<span class="due-cell">Due ${esc(op.dueDate)}</span>${op.notes ? ' ' + esc(op.notes) : ''}`
+        : esc(op.notes || '');
+      return `<tr>
+        <td><span class="op-num">${esc(op.opNumber)}</span></td>
+        <td>${esc(op.description)}</td>
+        <td><span class="resource">${esc(op.resource)}</span></td>
+        <td style="text-align:center;">&#9744;</td>
+        <td>${notes}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;font-style:italic;">No operations</td></tr>`;
+
+    const qty = d.qtyRequired ? String(d.qtyRequired) : '&mdash;';
+    const pb = pageBreak ? ' style="page-break-before:always"' : '';
+
+    return `<div class="traveler"${pb}>
+  <div class="header">
+    <div class="header-cell"><div class="label">Work Order #</div><div class="value-xl">&mdash;</div></div>
+    <div class="header-cell"><div class="label">Approved Print</div><div class="value" style="margin-top:6px;font-size:12px;">${esc(d.approvedPrint) || '&mdash;'}</div></div>
+    <div class="header-cell"><div class="label">WO Must Leave By</div><div class="due-alert">&mdash;</div></div>
+    <div class="header-cell"><div class="label">Customer Due</div><div class="value">&mdash;</div></div>
+  </div>
+  <div class="part-bar">
+    <div class="header-cell"><div class="label">Part Name</div><div class="value-large">${esc(d.partName) || '&mdash;'}</div></div>
+    <div class="header-cell"><div class="label">Part Number</div><div class="value">${esc(d.partNumber) || '&mdash;'}</div></div>
+    <div class="header-cell"><div class="label">Rev</div><div class="value-large" style="text-align:center;">${esc(d.revision) || '&mdash;'}</div></div>
+    <div class="header-cell" style="display:grid;grid-template-columns:1fr 1fr;">
+      <div><div class="label">Qty Ordered</div><div class="value-large" style="text-align:center;">${qty}</div></div>
+      <div><div class="label">Raw Stock Qty</div><div class="value-large" style="text-align:center;">${qty}</div></div>
+    </div>
+  </div>
+  <div class="material-row">
+    <div class="material-cell"><div class="label">Material / Part Stock</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.material) || '&mdash;'}</div></div>
+    <div class="material-cell"><div class="label">Outside Processing</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.outsideProcessing) || '&mdash;'}</div></div>
+  </div>
+  <div class="ops-section">
+    <table class="ops-table">
+      <thead><tr><th>Op #</th><th>Operation</th><th>Resource</th><th style="text-align:center;">Complete</th><th>Notes / Due</th></tr></thead>
+      <tbody>${opsRows}</tbody>
+    </table>
+  </div>
+  <div class="notes-section"><div class="label">Job Notes</div><div style="margin-top:6px;min-height:40px;font-size:12px;"></div></div>
+  <div class="footer record-footer">
+    <div class="footer-cell" style="grid-column:1/-1;"><div class="label">Record Created / Modified</div><div style="font-size:10px;color:#555;margin-top:3px;">&mdash;</div></div>
+  </div>
+</div>`;
+  }
+
+  // ── Traveler population ──────────────────────────────────────────────────
   function populateTraveler(d) {
     set('part-name',          d.partName);
     set('part-number',        d.partNumber);
@@ -712,6 +1221,11 @@ Return raw JSON only, no code fences.`;
     set('material',           d.material);
     set('outside-processing', d.outsideProcessing);
     set('approved-print',     d.approvedPrint);
+    set('wo-number',          '');
+    set('wo-must-leave',      '');
+    set('customer-due',       '');
+    set('qty-ordered',        d.qtyRequired ? String(d.qtyRequired) : '');
+    set('raw-stock-qty',      d.qtyRequired ? String(d.qtyRequired) : '');
     buildOpsTable(d.operations || []);
     syncOverrides();
   }
@@ -727,31 +1241,73 @@ Return raw JSON only, no code fences.`;
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;font-style:italic;">No operations found</td></tr>';
       return;
     }
-
     tbody.innerHTML = ops.map(op => {
-      const notesCell = op.dueDate
-        ? `<span class="due-cell">Due ${op.dueDate}</span>${op.notes ? ' ' + op.notes : ''}`
-        : (op.notes || '');
-
+      const notes = op.dueDate
+        ? `<span class="due-cell">Due ${esc(op.dueDate)}</span>${op.notes ? ' ' + esc(op.notes) : ''}`
+        : esc(op.notes || '');
       return `<tr>
         <td><span class="op-num">${esc(op.opNumber)}</span></td>
         <td>${esc(op.description)}</td>
         <td><span class="resource">${esc(op.resource)}</span></td>
         <td style="text-align:center;">&#9744;</td>
-        <td>${notesCell}</td>
+        <td>${notes}</td>
       </tr>`;
     }).join('');
   }
 
+  // ── Override panel ───────────────────────────────────────────────────────
+  function toggleOverride() {
+    const panel = document.getElementById('override-panel');
+    const btn   = document.getElementById('override-btn');
+    const show  = panel.style.display !== 'block';
+    panel.style.display = show ? 'block' : 'none';
+    btn.classList.toggle('active', show);
+    btn.textContent = show ? '✘ Close Overrides' : '✎ Edit Fields';
+  }
+
+  document.querySelectorAll('#override-panel [data-target]').forEach(el => {
+    el.addEventListener('input', function () {
+      const target = document.getElementById(this.dataset.target);
+      if (target) target.textContent = this.value.trim() || '—';
+    });
+  });
+
+  function syncOverrides() {
+    document.querySelectorAll('#override-panel [data-target]').forEach(el => {
+      const target = document.getElementById(el.dataset.target);
+      if (target) el.value = target.textContent === '—' ? '' : target.textContent;
+    });
+  }
+
+  // ── Simplified view ──────────────────────────────────────────────────────
+  function toggleSimplified() {
+    const traveler = document.getElementById('traveler');
+    const btn = document.getElementById('toggle-btn');
+    const on = traveler.classList.toggle('simplified');
+    btn.textContent = on ? '▣ Full View' : '▣ Simplified View';
+    btn.classList.toggle('active', on);
+  }
+
+  // ── Utilities ────────────────────────────────────────────────────────────
+  function calcCost(usage) {
+    if (!usage) return null;
+    const total = (usage.input_tokens || 0) / 1e6 * 5 + (usage.output_tokens || 0) / 1e6 * 25;
+    return total < 0.01 ? '<$0.01' : '$' + total.toFixed(4);
+  }
+
+  function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   function esc(s) {
     if (!s) return '';
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 </script>
-
 </body>
 </html>
