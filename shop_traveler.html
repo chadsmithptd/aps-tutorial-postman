@@ -305,7 +305,8 @@
   .bom-node.clickable { cursor: pointer; }
   .bom-node.clickable:hover { background: #eef3fa; }
   .bom-node.active    { background: #1a5fa8; color: #fff; }
-  .bom-node.purchase  { color: #999; font-style: italic; cursor: default; }
+  .bom-node.purchase  { color: #888; font-style: italic; cursor: pointer; }
+  .bom-node.purchase:hover { background: #fdf6ec; }
 
   .bom-toggle {
     font-size: 9px;
@@ -478,6 +479,57 @@
     object-position: top;
     cursor: zoom-in;
   }
+
+  /* Vendor card (purchase items) */
+  #vendor-card {
+    display: none;
+    padding: 16px;
+  }
+  .vendor-card-name {
+    font-size: 14px;
+    font-weight: bold;
+    color: #222;
+    margin-bottom: 4px;
+  }
+  .vendor-card-pn {
+    font-size: 11px;
+    color: #666;
+    font-family: monospace;
+    margin-bottom: 12px;
+  }
+  .vendor-card-field {
+    display: flex;
+    gap: 6px;
+    font-size: 11px;
+    color: #444;
+    margin-bottom: 5px;
+  }
+  .vendor-card-label {
+    font-weight: bold;
+    color: #888;
+    text-transform: uppercase;
+    font-size: 10px;
+    min-width: 60px;
+    padding-top: 1px;
+  }
+  .vendor-card-value { color: #222; }
+  .vendor-card-link {
+    display: block;
+    margin-top: 16px;
+    padding: 9px 14px;
+    background: #c8000a;
+    color: #fff;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    border-radius: 4px;
+    text-decoration: none;
+    letter-spacing: 0.3px;
+    transition: background 0.15s;
+  }
+  .vendor-card-link:hover { background: #a00008; }
+  .vendor-card-link.google { background: #1a73e8; }
+  .vendor-card-link.google:hover { background: #1558b0; }
 
   /* Lightbox overlay */
   #image-lightbox {
@@ -739,10 +791,18 @@
 
   </div><!-- /.traveler -->
 
-  <!-- Blueprint image preview (right of traveler, shown on item selection) -->
+  <!-- Blueprint image preview / vendor card (right of traveler, shown on item selection) -->
   <div id="image-panel">
-    <div class="image-panel-header">Blueprint</div>
+    <div class="image-panel-header" id="image-panel-header">Blueprint</div>
     <img id="image-panel-img" src="" alt="Blueprint" onclick="openLightbox()">
+    <div id="vendor-card">
+      <div class="vendor-card-name" id="vc-name"></div>
+      <div class="vendor-card-pn" id="vc-pn"></div>
+      <div class="vendor-card-field"><span class="vendor-card-label">Vendor</span><span class="vendor-card-value" id="vc-vendor"></span></div>
+      <div class="vendor-card-field"><span class="vendor-card-label">Qty</span><span class="vendor-card-value" id="vc-qty"></span></div>
+      <div class="vendor-card-field"><span class="vendor-card-label">Notes</span><span class="vendor-card-value" id="vc-notes"></span></div>
+      <a id="vc-link" href="#" target="_blank" rel="noopener" class="vendor-card-link">Search Supplier</a>
+    </div>
   </div>
 
 </div><!-- /#main-workspace -->
@@ -1013,6 +1073,8 @@
 
     if (!isPurchase) {
       node.addEventListener('click', () => selectBOMItem(item.partNumber));
+    } else {
+      node.addEventListener('click', () => selectPurchaseItem(item));
     }
 
     container.appendChild(node);
@@ -1045,6 +1107,42 @@
       if (idx != null && packetImageDataUrls[idx]) showImagePanel(packetImageDataUrls[idx]);
       else hideImagePanel();
     }
+  }
+
+  function selectPurchaseItem(item) {
+    document.querySelectorAll('#bom-tree .bom-node').forEach(n => n.classList.remove('active'));
+    const node = document.querySelector('#bom-tree .bom-node[data-pn="' + CSS.escape(item.partNumber || '') + '"]');
+    if (node) node.classList.add('active');
+    showVendorPanel(item);
+  }
+
+  function showVendorPanel(item) {
+    const query = [item.partName, item.partNumber, item.notes].filter(Boolean).join(' ');
+    const vendor = item.vendor || '';
+    let href, linkClass;
+    if (vendor.toLowerCase().includes('mcmaster')) {
+      href = 'https://www.mcmaster.com/#' + encodeURIComponent(query);
+      linkClass = 'vendor-card-link';
+    } else {
+      const gQuery = vendor ? query + ' ' + vendor : query;
+      href = 'https://www.google.com/search?q=' + encodeURIComponent(gQuery);
+      linkClass = 'vendor-card-link google';
+    }
+
+    document.getElementById('vc-name').textContent    = item.partName   || '—';
+    document.getElementById('vc-pn').textContent      = item.partNumber || '';
+    document.getElementById('vc-vendor').textContent  = vendor          || '—';
+    document.getElementById('vc-qty').textContent     = item.qtyRequired != null ? item.qtyRequired : '—';
+    document.getElementById('vc-notes').textContent   = item.notes      || '—';
+    const link = document.getElementById('vc-link');
+    link.href      = href;
+    link.className = linkClass;
+    link.textContent = vendor.toLowerCase().includes('mcmaster') ? 'Search McMaster-Carr' : 'Search Google';
+
+    document.getElementById('image-panel-img').style.display = 'none';
+    document.getElementById('vendor-card').style.display     = 'block';
+    document.getElementById('image-panel-header').textContent = 'Purchase Item';
+    document.getElementById('image-panel').style.display     = 'block';
   }
 
   // ── Exit / reset ─────────────────────────────────────────────────────────
@@ -1381,13 +1479,18 @@ Rules:
 
   // ── Image panel ──────────────────────────────────────────────────────────
   function showImagePanel(dataUrl) {
-    document.getElementById('image-panel-img').src = dataUrl;
-    document.getElementById('image-panel').style.display = 'block';
+    document.getElementById('vendor-card').style.display       = 'none';
+    document.getElementById('image-panel-img').style.display   = 'block';
+    document.getElementById('image-panel-img').src             = dataUrl;
+    document.getElementById('image-panel-header').textContent  = 'Blueprint';
+    document.getElementById('image-panel').style.display       = 'block';
   }
 
   function hideImagePanel() {
-    document.getElementById('image-panel').style.display = 'none';
-    document.getElementById('image-panel-img').src = '';
+    document.getElementById('image-panel').style.display     = 'none';
+    document.getElementById('image-panel-img').src           = '';
+    document.getElementById('image-panel-img').style.display = 'block';
+    document.getElementById('vendor-card').style.display     = 'none';
     closeLightbox();
   }
 
