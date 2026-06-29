@@ -96,6 +96,73 @@
   .traveler.simplified .notes-section,
   .traveler.simplified .record-footer { display: none; }
 
+  /* ── Override panel ── */
+  .btn-override {
+    background: #5a5a8a;
+    color: #fff;
+  }
+  .btn-override:hover { background: #444470; }
+  .btn-override.active { background: #3a3a6a; }
+
+  #override-panel {
+    display: none;
+    margin-bottom: 20px;
+    background: #fff;
+    border: 1px solid #aac;
+    border-left: 4px solid #5a5a8a;
+    border-radius: 6px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+
+  .override-title {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #5a5a8a;
+    margin-bottom: 12px;
+  }
+
+  .override-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px 16px;
+  }
+
+  .override-field { display: flex; flex-direction: column; gap: 3px; }
+
+  .override-field label {
+    font-size: 9px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #777;
+  }
+
+  .override-field input,
+  .override-field textarea {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    padding: 5px 7px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    color: #000;
+    resize: vertical;
+  }
+  .override-field input:focus,
+  .override-field textarea:focus {
+    outline: none;
+    border-color: #5a5a8a;
+    box-shadow: 0 0 0 2px rgba(90,90,138,0.15);
+  }
+
+  .override-wide { grid-column: span 2; }
+
+  @media print {
+    #override-panel { display: none !important; }
+  }
+
   #file-input { display: none; }
 
   .upload-status {
@@ -295,6 +362,9 @@
   <button class="btn btn-upload" id="upload-btn" onclick="document.getElementById('file-input').click()">
     &#8593; Upload Blueprint
   </button>
+  <button class="btn btn-override" id="override-btn" onclick="toggleOverride()">
+    &#9998; Edit Fields
+  </button>
   <button class="btn btn-toggle" id="toggle-btn" onclick="toggleSimplified()">
     &#9638; Simplified View
   </button>
@@ -303,7 +373,62 @@
   </button>
 </div>
 
-<!-- Screenshot Preview -->
+<!-- Override Panel -->
+<div id="override-panel">
+  <div class="override-title">&#9998; Field Overrides — correct any misread values below</div>
+  <div class="override-grid">
+
+    <div class="override-field">
+      <label>Work Order #</label>
+      <input type="text" data-target="wo-number" placeholder="e.g. 26-0042">
+    </div>
+    <div class="override-field">
+      <label>Approved Print</label>
+      <input type="text" data-target="approved-print" placeholder="filename.pdf">
+    </div>
+    <div class="override-field">
+      <label>WO Must Leave By</label>
+      <input type="text" data-target="wo-must-leave" placeholder="mm/dd/yyyy">
+    </div>
+    <div class="override-field">
+      <label>Customer Due</label>
+      <input type="text" data-target="customer-due" placeholder="mm/dd/yyyy">
+    </div>
+
+    <div class="override-field override-wide">
+      <label>Part Name</label>
+      <input type="text" data-target="part-name" placeholder="Part name">
+    </div>
+    <div class="override-field">
+      <label>Part Number</label>
+      <input type="text" data-target="part-number" placeholder="e.g. 455-05293-0">
+    </div>
+    <div class="override-field">
+      <label>Rev</label>
+      <input type="text" data-target="part-rev" placeholder="e.g. 01">
+    </div>
+
+    <div class="override-field">
+      <label>Qty Ordered</label>
+      <input type="text" data-target="qty-ordered" placeholder="e.g. 40">
+    </div>
+    <div class="override-field">
+      <label>Raw Stock Qty</label>
+      <input type="text" data-target="raw-stock-qty" placeholder="e.g. 40">
+    </div>
+    <div class="override-field override-wide">
+      <label>Material / Part Stock</label>
+      <textarea data-target="material" rows="2" placeholder="e.g. Aluminum 6061-T6 AMS-4027"></textarea>
+    </div>
+    <div class="override-field override-wide">
+      <label>Outside Processing</label>
+      <textarea data-target="outside-processing" rows="2" placeholder="e.g. Anodize — Upstate Anodize LLC"></textarea>
+    </div>
+
+  </div>
+</div>
+
+<!-- Blueprint Preview -->
 <div id="preview-panel">
   <p>Uploaded Screenshot</p>
   <img id="preview-img" src="" alt="Uploaded screenshot">
@@ -455,6 +580,34 @@
     }
   });
 
+  function toggleOverride() {
+    const panel = document.getElementById('override-panel');
+    const btn   = document.getElementById('override-btn');
+    const show  = panel.style.display === 'none' || panel.style.display === '';
+    panel.style.display = show ? 'block' : 'none';
+    btn.classList.toggle('active', show);
+    btn.textContent = show ? '✘ Close Overrides' : '✎ Edit Fields';
+  }
+
+  // Live-bind override inputs → traveler fields
+  document.querySelectorAll('#override-panel [data-target]').forEach(el => {
+    el.addEventListener('input', function () {
+      const target = document.getElementById(this.dataset.target);
+      if (target) target.textContent = this.value.trim() || '—';
+    });
+  });
+
+  // Sync override inputs from current traveler DOM values
+  function syncOverrides() {
+    document.querySelectorAll('#override-panel [data-target]').forEach(el => {
+      const target = document.getElementById(el.dataset.target);
+      if (target) {
+        const val = target.textContent;
+        el.value = val === '—' ? '' : val;
+      }
+    });
+  }
+
   function toggleSimplified() {
     const traveler = document.getElementById('traveler');
     const btn = document.getElementById('toggle-btn');
@@ -560,6 +713,7 @@ Return raw JSON only, no code fences.`;
     set('outside-processing', d.outsideProcessing);
     set('approved-print',     d.approvedPrint);
     buildOpsTable(d.operations || []);
+    syncOverrides();
   }
 
   function set(id, val) {
