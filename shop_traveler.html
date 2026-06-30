@@ -1681,14 +1681,11 @@ Rules:
       const notes = op.dueDate
         ? `<span class="due-cell">Due ${esc(op.dueDate)}</span>${op.notes ? ' ' + esc(op.notes) : ''}`
         : esc(op.notes || '');
-      const resource = esc(op.resource || '');
-      const hasType = types.includes(op.resource || '');
-      const extraOpt = hasType ? '' : `<option value="${resource}" selected>${resource}</option>`;
       return `<tr>
         <td><span class="op-num">${esc(op.opNumber)}</span></td>
         <td>${esc(op.brief || '')}</td>
         <td>${esc(op.description)}</td>
-        <td><select class="resource-select" onchange="this.closest('td').dataset.resource=this.value">${extraOpt}${optionsHTML}</select></td>
+        <td><select class="resource-select" onchange="this.closest('td').dataset.resource=this.value">${optionsHTML}</select></td>
         <td style="text-align:center;">&#9744;</td>
         <td>${notes}</td>
       </tr>`;
