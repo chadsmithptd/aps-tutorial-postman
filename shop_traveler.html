@@ -1455,14 +1455,13 @@
       'part-number':    domVal('part-number'),
       'part-rev':       domVal('part-rev'),
       'approved-print': domVal('approved-print'),
-      'material':       domVal('material'),
       'routing':        '1',
       'customer-id':    custId,
       'wo-ref':         custId + '-' + domVal('part-number'),
     };
 
     const resourceSelects = document.querySelectorAll('#ops-tbody select.resource-select');
-    const PART_FIELDS = new Set(['part-name','part-number','part-rev','approved-print','material','routing','customer-id','wo-ref']);
+    const PART_FIELDS = new Set(['part-name','part-number','part-rev','approved-print','routing','customer-id','wo-ref']);
 
     const fields = Object.keys(m);
     const header = fields.map(f => csvCell(m[f])).join(',');
@@ -1475,6 +1474,7 @@
         'op-brief':          op.brief       || '',
         'op-description':    op.description || '',
         'op-resource':       resourceSelects[i] ? resourceSelects[i].value : (op.resource || ''),
+        'material':          isOp10 ? domVal('material') : '',
         'material-grade':    isOp10 ? (currentTravelerData.materialGrade    || '') : '',
         'material-standard': isOp10 ? (currentTravelerData.materialStandard || '') : '',
         'outside-proc-type': isOP   ? (op.outsideProcessingType || '') : '',
