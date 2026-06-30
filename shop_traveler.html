@@ -56,6 +56,10 @@
     font-family: monospace;
   }
 
+  .customer-id-wrap { display: flex; align-items: center; gap: 6px; }
+  .customer-id-wrap label { font-size: 11px; font-weight: bold; color: #555; white-space: nowrap; }
+  .customer-id-wrap input { font-size: 11px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; width: 120px; }
+
   .btn {
     display: inline-flex;
     align-items: center;
@@ -76,6 +80,7 @@
 
   .btn-print   { background: #2d7a2d; color: #fff; }
   .btn-print:hover { background: #235e23; }
+  .btn-print:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .btn-print-all { background: #2d7a2d; color: #fff; }
   .btn-print-all:hover { background: #235e23; }
@@ -531,11 +536,6 @@
   }
   .material-cell:last-child { border-right: none; }
 
-  .customer-id-row { display: flex; align-items: center; gap: 10px; padding: 4px 10px; background: #f7f7f7; border-top: 1px solid #000; border-bottom: 1px solid #000; }
-  .customer-id-row .label { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
-  .customer-id-input { font-size: 13px; font-weight: 600; border: none; border-bottom: 1px dashed #aaa; background: transparent; flex: 1; padding: 2px 4px; color: #1a1a1a; }
-  .customer-id-input:focus { outline: none; border-bottom-color: #3a6a3a; }
-
   .ops-table { width: 100%; border-collapse: collapse; }
   .ops-table thead tr { background: #222; color: #fff; }
   .ops-table th {
@@ -742,6 +742,10 @@
     <label for="api-key-input">API Key:</label>
     <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off">
   </div>
+  <div class="customer-id-wrap">
+    <label for="customer-id">Customer ID:</label>
+    <input type="text" id="customer-id" placeholder="e.g. ACME" autocomplete="off">
+  </div>
   <span class="upload-status" id="upload-status">No blueprint loaded</span>
   <input type="file" id="file-input" accept="image/*" multiple>
   <button class="btn btn-upload" id="upload-btn" onclick="document.getElementById('file-input').click()">
@@ -765,7 +769,7 @@
   <button class="btn btn-print" onclick="window.print()">
     &#128438; Print
   </button>
-  <button class="btn btn-print" onclick="downloadCSV()">
+  <button class="btn btn-print" id="export-csv-btn" onclick="downloadCSV()">
     &#8659; Export CSV
   </button>
 </div>
@@ -854,6 +858,7 @@
     <div class="csv-map-group-label">Generic</div>
     <span class="csv-map-label">Routing</span>           <input class="csv-map-input" data-field="routing">
     <span class="csv-map-label">Customer ID</span>       <input class="csv-map-input" data-field="customer-id">
+    <span class="csv-map-label">WO Ref (CustID-Part#)</span> <input class="csv-map-input" data-field="wo-ref">
     <div class="csv-map-group-label">Operation (per row)</div>
     <span class="csv-map-label">Op #</span>              <input class="csv-map-input" data-field="op-number">
     <span class="csv-map-label">Description</span>       <input class="csv-map-input" data-field="op-brief">
@@ -932,11 +937,6 @@
           <div class="value-large" style="text-align:center;" id="raw-stock-qty">&mdash;</div>
         </div>
       </div>
-    </div>
-
-    <div class="customer-id-row">
-      <div class="label">Customer ID</div>
-      <input type="text" id="customer-id" class="customer-id-input" placeholder="Enter customer ID&hellip;">
     </div>
 
     <div class="material-row">
@@ -1382,6 +1382,7 @@
     'op-brief':          'OP_BRIEF',
     'op-description':    'OP_DESCRIPTION',
     'op-resource':       'RESOURCE',
+    'wo-ref':            'WO_REF',
   };
 
   function getCsvMapping() {
@@ -1441,6 +1442,11 @@
       alert('Upload a blueprint first.');
       return;
     }
+    const custId = domVal('customer-id');
+    if (!custId) {
+      alert('Please enter a Customer ID before exporting.');
+      return;
+    }
     const m   = getCsvMapping();
     const ops = currentTravelerData.operations || [];
 
@@ -1451,11 +1457,12 @@
       'approved-print': domVal('approved-print'),
       'material':       domVal('material'),
       'routing':        '1',
-      'customer-id':    domVal('customer-id'),
+      'customer-id':    custId,
+      'wo-ref':         custId + '-' + domVal('part-number'),
     };
 
     const resourceSelects = document.querySelectorAll('#ops-tbody select.resource-select');
-    const PART_FIELDS = new Set(['part-name','part-number','part-rev','approved-print','material','routing','customer-id']);
+    const PART_FIELDS = new Set(['part-name','part-number','part-rev','approved-print','material','routing','customer-id','wo-ref']);
 
     const fields = Object.keys(m);
     const header = fields.map(f => csvCell(m[f])).join(',');
@@ -1997,6 +2004,13 @@ Rules:
   }
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  function syncExportBtn() {
+    const btn = document.getElementById('export-csv-btn');
+    if (btn) btn.disabled = !domVal('customer-id');
+  }
+  document.getElementById('customer-id').addEventListener('input', syncExportBtn);
+  syncExportBtn();
 
   // ── Utilities ────────────────────────────────────────────────────────────
   function calcCost(usage) {
