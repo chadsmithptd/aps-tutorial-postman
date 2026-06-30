@@ -124,6 +124,111 @@
     flex: 1;
   }
 
+  /* Config panel */
+  #config-panel {
+    display: none;
+    margin-bottom: 16px;
+    background: #fff;
+    border: 1px solid #bbb;
+    border-left: 4px solid #3a6a3a;
+    border-radius: 6px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+
+  .config-panel-title {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #3a6a3a;
+    margin-bottom: 12px;
+  }
+
+  #config-op-types-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .config-type-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f0f4f0;
+    border: 1px solid #aac8aa;
+    border-radius: 14px;
+    padding: 3px 10px 3px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #2a4a2a;
+  }
+
+  .config-type-del {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #888;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+  }
+  .config-type-del:hover { color: #c00; }
+
+  .config-add-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .config-add-row input {
+    font-size: 12px;
+    padding: 5px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 200px;
+    font-family: Arial, sans-serif;
+  }
+
+  .config-add-row input:focus {
+    outline: none;
+    border-color: #3a6a3a;
+    box-shadow: 0 0 0 2px rgba(58,106,58,0.15);
+  }
+
+  .btn-config-add {
+    background: #3a6a3a;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .btn-config-add:hover { background: #2a4a2a; }
+
+  /* Resource select in ops table */
+  .ops-table select.resource-select {
+    font-size: 10px;
+    font-weight: bold;
+    color: #1a5fa8;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    width: 100%;
+    font-family: Arial, sans-serif;
+  }
+  .ops-table select.resource-select:focus { outline: 1px solid #1a5fa8; border-radius: 2px; }
+
+  /* Description (brief) column width */
+  .ops-table th:nth-child(2),
+  .ops-table td:nth-child(2) { width: 95px; font-size: 11px; color: #444; }
+
   /* Override panel */
   #override-panel {
     display: none;
@@ -570,7 +675,7 @@
   /* Print */
   @media print {
     body { background: #fff; padding: 0; }
-    .toolbar, #preview-panel, #override-panel, #mode-prompt { display: none !important; }
+    .toolbar, #preview-panel, #override-panel, #config-panel, #mode-prompt { display: none !important; }
     #batch-panel, #bom-panel, #image-panel { display: none !important; }
     #main-workspace { display: block !important; }
     .traveler { width: 100%; border: 2px solid #000; }
@@ -607,6 +712,9 @@
   </button>
   <button class="btn btn-override" id="override-btn" onclick="toggleOverride()">
     &#9998; Edit Fields
+  </button>
+  <button class="btn btn-toggle" id="config-btn" onclick="toggleConfig()">
+    &#9881; Config
   </button>
   <button class="btn btn-toggle" id="toggle-btn" onclick="toggleSimplified()">
     &#9638; Simplified View
@@ -671,6 +779,17 @@
       <label>Outside Processing</label>
       <textarea data-target="outside-processing" rows="2" placeholder="e.g. Anodize"></textarea>
     </div>
+  </div>
+</div>
+
+<!-- Config panel -->
+<div id="config-panel">
+  <div class="config-panel-title">&#9881; Operation Types &mdash; manage available resource options for the routing table</div>
+  <div id="config-op-types-list"></div>
+  <div class="config-add-row">
+    <input id="config-new-type" type="text" placeholder="New operation type…" maxlength="40"
+           onkeydown="if(event.key==='Enter')addOpType()">
+    <button class="btn-config-add" onclick="addOpType()">+ Add</button>
   </div>
 </div>
 
@@ -761,6 +880,7 @@
         <thead>
           <tr>
             <th>Op #</th>
+            <th>Description</th>
             <th>Operation</th>
             <th>Resource</th>
             <th style="text-align:center;">Complete</th>
@@ -769,7 +889,7 @@
         </thead>
         <tbody id="ops-tbody">
           <tr>
-            <td colspan="5" style="text-align:center;color:#888;padding:20px;font-style:italic;">
+            <td colspan="6" style="text-align:center;color:#888;padding:20px;font-style:italic;">
               Upload a blueprint to generate operations routing
             </td>
           </tr>
@@ -1171,6 +1291,94 @@
     document.getElementById('mode-prompt').style.display = 'none';
   }
 
+  // ── Config: Operation Types ──────────────────────────────────────────────
+  const DEFAULT_OP_TYPES = [
+    'CNC LATHE','VMC','HMC','SURFACE GRIND','CYLINDRICAL GRIND',
+    'EDM','DEBURR','INSPECT','OUTSIDE PROC','ASSEMBLY','SHIP'
+  ];
+
+  function getOpTypes() {
+    try {
+      const stored = localStorage.getItem('aps-op-types');
+      if (stored) return JSON.parse(stored);
+    } catch(e) {}
+    return [...DEFAULT_OP_TYPES];
+  }
+
+  function saveOpTypes(arr) {
+    localStorage.setItem('aps-op-types', JSON.stringify(arr));
+  }
+
+  function renderOpTypeList() {
+    const types = getOpTypes();
+    const list = document.getElementById('config-op-types-list');
+    list.innerHTML = types.map((t, i) =>
+      `<span class="config-type-chip">${esc(t)}<button class="config-type-del" title="Remove" onclick="deleteOpType(${i})">&#x2715;</button></span>`
+    ).join('');
+  }
+
+  function addOpType() {
+    const input = document.getElementById('config-new-type');
+    const val = input.value.trim().toUpperCase();
+    if (!val) return;
+    const types = getOpTypes();
+    if (!types.includes(val)) {
+      types.push(val);
+      saveOpTypes(types);
+      renderOpTypeList();
+    }
+    input.value = '';
+    input.focus();
+  }
+
+  function deleteOpType(i) {
+    const types = getOpTypes();
+    types.splice(i, 1);
+    saveOpTypes(types);
+    renderOpTypeList();
+  }
+
+  function toggleConfig() {
+    const panel = document.getElementById('config-panel');
+    const btn   = document.getElementById('config-btn');
+    const show  = panel.style.display !== 'block';
+    panel.style.display = show ? 'block' : 'none';
+    btn.classList.toggle('active', show);
+    btn.textContent = show ? '✕ Close Config' : '⚙ Config';
+    if (show) renderOpTypeList();
+  }
+
+  // ── Op post-processing: enforce bookend numbers + outside proc spacing ────
+  function isOutsideProc(resource) {
+    return (resource || '').toUpperCase().includes('OUTSIDE');
+  }
+
+  function postProcessOps(ops) {
+    if (!ops || ops.length < 3) return ops || [];
+
+    const first  = { ...ops[0], opNumber: '10' };
+    const last2  = [
+      { ...ops[ops.length - 2], opNumber: '2000' },
+      { ...ops[ops.length - 1], opNumber: '2010' }
+    ];
+    const middle = ops.slice(1, -2);
+
+    let num = 20;
+    const renumbered = middle.map((op, i) => {
+      if (i > 0) {
+        const prevIsOut = isOutsideProc(middle[i - 1].resource);
+        const curIsOut  = isOutsideProc(op.resource);
+        if      (prevIsOut && curIsOut) num += 40; // consecutive outside: skip 3
+        else if (prevIsOut)             num += 30; // after outside: skip 2
+        else if (curIsOut)              num += 20; // before outside: skip 1
+        else                            num += 10; // normal
+      }
+      return { ...op, opNumber: String(num) };
+    });
+
+    return [first, ...renumbered, ...last2];
+  }
+
   // ── API: single image ────────────────────────────────────────────────────
   async function extractFromImage(apiKey, base64, mediaType) {
     const prompt = `You are a master CNC machining quoter with 25 years of experience in high-precision aerospace and defense manufacturing. Analyze this engineering blueprint and produce a complete manufacturing routing.
@@ -1181,7 +1389,6 @@ Your process:
 3. Group features into logical setups — each setup is one clamping/fixturing configuration
 4. Sequence setups in the most efficient machining order (e.g., turn raw stock first, then mill, then grind tight-tolerance features, then outside processing)
 5. Assign the correct machine resource to each operation
-6. Add standard shop closing operations: DEBURR, FINAL INSPECT, SHIP
 
 Title block extraction: pull part name, part number, revision, material spec, and any finish/coating callouts visible. Use "" for anything not shown.
 
@@ -1197,6 +1404,14 @@ Return ONLY valid JSON — no markdown, no explanation:
   "operations": [
     {
       "opNumber": "10",
+      "brief": "Program, model part",
+      "description": "Part Programming / Modeling – create CNC programs and setup sheets",
+      "resource": "CNC LATHE",
+      "notes": ""
+    },
+    {
+      "opNumber": "20",
+      "brief": "Face, turn OD",
       "description": "Lathe Op 1 – Face both ends, turn major OD, drill/bore ID",
       "resource": "CNC LATHE",
       "notes": ""
@@ -1204,9 +1419,17 @@ Return ONLY valid JSON — no markdown, no explanation:
   ]
 }
 
-Numbering: multiples of 10 (10, 20, 30…).
+Op numbering rules:
+- Op 10: ALWAYS the first operation — "Part Programming / Modeling", resource: CNC LATHE
+- Middle ops: number sequentially from 20 in increments of 10
+- Outside Processing spacing: skip one step BEFORE an OUTSIDE PROC op, skip two steps AFTER. Example: regular ops at 60, then outside proc at 80 (skip 70), then next op at 110 (skip 90, 100). Two consecutive outside proc ops: 80, 120 (skip 3 between them)
+- Op 2000: ALWAYS second-to-last — "Final Inspection", resource: INSPECT
+- Op 2010: ALWAYS last — "Shipping", resource: SHIP
+- Do NOT add DEBURR, INSPECT, or SHIP ops in the middle routing
+
 Resource options: CNC LATHE | VMC | HMC | SURFACE GRIND | CYLINDRICAL GRIND | EDM | DEBURR | INSPECT | OUTSIDE PROC | SHIP
-Description format: "Setup Name – comma-separated list of key features machined"
+"brief": 3-5 word quick label (e.g., "Face, turn OD", "Mill pockets, slots", "Cylindrical grind ID", "Outside anodize")
+"description": full verbose setup description — "Setup Name – features machined"
 Use "" for notes unless there is a critical tolerance or special instruction worth flagging.
 Return raw JSON only, no code fences.`;
 
@@ -1236,6 +1459,7 @@ Return raw JSON only, no code fences.`;
     const result = await resp.json();
     const raw = result.content[0].text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
     const data = JSON.parse(raw);
+    data.operations = postProcessOps(data.operations);
     data._usage = result.usage;
     return data;
   }
@@ -1258,7 +1482,7 @@ For EACH IMAGE (referenced by its 0-based position index):
    - "make": manufactured in-house (requires machining routing)
    - "purchase": bought item (hardware, bearings, seals, etc.)
 
-3. Assembly/sub-assembly items: generate assembly routing (Resource: ASSEMBLY). Typical ops: stage/verify components, install sub-assemblies by name, torque fasteners, inspect, ship.
+3. Assembly/sub-assembly items: generate assembly routing (Resource: ASSEMBLY). Typical ops: Op 10 Part Programming / Modeling, then stage/verify components, install sub-assemblies by name, torque fasteners. End with Op 2000 Final Inspection (INSPECT) and Op 2010 Shipping (SHIP).
 
 4. Make items: generate complete CNC machining routing. Study all views, dimensions, tolerances, GD&T, surface finish. Group by logical setups (one clamping = one op). Sequence: raw stock → rough → finish → grind → outside process. Resources: CNC LATHE | VMC | HMC | SURFACE GRIND | CYLINDRICAL GRIND | EDM | DEBURR | INSPECT | OUTSIDE PROC | SHIP
 
@@ -1267,6 +1491,16 @@ For EACH IMAGE (referenced by its 0-based position index):
 6. Track parent-child relationships using part numbers from BOM tables.
    - childPartNumbers: list of part numbers in this item's BOM
    - parentPartNumber: part number of the assembly this item belongs to (null for top-level)
+
+Each operation must have a "brief" field (3-5 words) and a "description" field (full verbose setup description).
+
+Op numbering rules (apply to all make and assembly items):
+- Op 10: ALWAYS the first operation — "Part Programming / Modeling", resource: CNC LATHE (or ASSEMBLY for assembly items)
+- Middle ops: number sequentially from 20 in increments of 10
+- Outside Processing spacing: skip one step BEFORE an OUTSIDE PROC op, two steps AFTER. Example: 60 → 80 (outside proc, skipped 70) → 110 (skipped 90, 100). Two consecutive: 80, 120 (skip 3 between)
+- Op 2000: ALWAYS second-to-last — "Final Inspection", resource: INSPECT
+- Op 2010: ALWAYS last — "Shipping", resource: SHIP
+- Do NOT add DEBURR, INSPECT, or SHIP in the middle ops
 
 Return ONLY valid JSON:
 
@@ -1285,7 +1519,9 @@ Return ONLY valid JSON:
       "material": "",
       "outsideProcessing": "",
       "approvedPrint": "",
-      "operations": []
+      "operations": [
+        { "opNumber": "10", "brief": "Program, model part", "description": "Part Programming / Modeling – create CNC programs and setup sheets", "resource": "CNC LATHE", "notes": "" }
+      ]
     }
   ]
 }
@@ -1294,8 +1530,6 @@ Rules:
 - sourceImageIndex: 0-based index of the image this item came from (null for purchase items not shown as drawings)
 - parentPartNumber: null only for the single top-level assembly
 - Use "" for any field not visible
-- Operation numbering: multiples of 10
-- All make and assembly items must end with INSPECT and SHIP operations
 - Return raw JSON only, no code fences`;
 
     const content = [
@@ -1329,6 +1563,12 @@ Rules:
     const result = await resp.json();
     const raw = result.content[0].text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
     const data = JSON.parse(raw);
+    if (data.items) {
+      data.items = data.items.map(item => ({
+        ...item,
+        operations: postProcessOps(item.operations)
+      }));
+    }
     data._usage = result.usage;
     return data;
   }
@@ -1363,12 +1603,13 @@ Rules:
         : esc(op.notes || '');
       return `<tr>
         <td><span class="op-num">${esc(op.opNumber)}</span></td>
+        <td>${esc(op.brief || '')}</td>
         <td>${esc(op.description)}</td>
         <td><span class="resource">${esc(op.resource)}</span></td>
         <td style="text-align:center;">&#9744;</td>
         <td>${notes}</td>
       </tr>`;
-    }).join('') || `<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;font-style:italic;">No operations</td></tr>`;
+    }).join('') || `<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;font-style:italic;">No operations</td></tr>`;
 
     const qty = d.qtyRequired ? String(d.qtyRequired) : '&mdash;';
     const pb = pageBreak ? ' style="page-break-before:always"' : '';
@@ -1395,7 +1636,7 @@ Rules:
   </div>
   <div class="ops-section">
     <table class="ops-table">
-      <thead><tr><th>Op #</th><th>Operation</th><th>Resource</th><th style="text-align:center;">Complete</th><th>Notes / Due</th></tr></thead>
+      <thead><tr><th>Op #</th><th>Description</th><th>Operation</th><th>Resource</th><th style="text-align:center;">Complete</th><th>Notes / Due</th></tr></thead>
       <tbody>${opsRows}</tbody>
     </table>
   </div>
@@ -1431,21 +1672,31 @@ Rules:
   function buildOpsTable(ops) {
     const tbody = document.getElementById('ops-tbody');
     if (!ops.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;font-style:italic;">No operations found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;font-style:italic;">No operations found</td></tr>';
       return;
     }
+    const types = getOpTypes();
+    const optionsHTML = types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
     tbody.innerHTML = ops.map(op => {
       const notes = op.dueDate
         ? `<span class="due-cell">Due ${esc(op.dueDate)}</span>${op.notes ? ' ' + esc(op.notes) : ''}`
         : esc(op.notes || '');
+      const resource = esc(op.resource || '');
+      const hasType = types.includes(op.resource || '');
+      const extraOpt = hasType ? '' : `<option value="${resource}" selected>${resource}</option>`;
       return `<tr>
         <td><span class="op-num">${esc(op.opNumber)}</span></td>
+        <td>${esc(op.brief || '')}</td>
         <td>${esc(op.description)}</td>
-        <td><span class="resource">${esc(op.resource)}</span></td>
+        <td><select class="resource-select" onchange="this.closest('td').dataset.resource=this.value">${extraOpt}${optionsHTML}</select></td>
         <td style="text-align:center;">&#9744;</td>
         <td>${notes}</td>
       </tr>`;
     }).join('');
+    // Set each select to the current resource value
+    tbody.querySelectorAll('select.resource-select').forEach((sel, i) => {
+      sel.value = ops[i].resource || '';
+    });
   }
 
   // ── Override panel ───────────────────────────────────────────────────────
