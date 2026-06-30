@@ -519,9 +519,11 @@
 
   .material-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 1fr;
     border-bottom: 2px solid #000;
   }
+
+  .op-detail { font-size: 10px; color: #666; margin-top: 3px; font-style: italic; letter-spacing: 0.2px; }
 
   .material-cell {
     padding: 8px 10px;
@@ -819,26 +821,6 @@
       <label>Material</label>
       <input type="text" data-target="material" placeholder="e.g. 4140 Steel">
     </div>
-    <div class="override-field">
-      <label>Material Grade</label>
-      <input type="text" data-target="material-grade" placeholder="e.g. Annealed, T6">
-    </div>
-    <div class="override-field">
-      <label>Material Standard</label>
-      <input type="text" data-target="material-standard" placeholder="e.g. AMS 6349, ASTM B209">
-    </div>
-    <div class="override-field override-wide">
-      <label>Outside Proc Type</label>
-      <input type="text" data-target="outside-proc-type" placeholder="e.g. Black Oxide, Hard Anodize">
-    </div>
-    <div class="override-field">
-      <label>Mil Spec</label>
-      <input type="text" data-target="mil-spec" placeholder="e.g. MIL-DTL-13924">
-    </div>
-    <div class="override-field">
-      <label>Additional Spec</label>
-      <input type="text" data-target="add-spec" placeholder="e.g. Class 1">
-    </div>
   </div>
 </div>
 
@@ -961,28 +943,6 @@
       <div class="material-cell">
         <div class="label">Material</div>
         <div class="value" style="font-size:12px;margin-top:4px;" id="material">&mdash;</div>
-      </div>
-      <div class="material-cell">
-        <div class="label">Material Grade</div>
-        <div class="value" style="font-size:12px;margin-top:4px;" id="material-grade">&mdash;</div>
-      </div>
-      <div class="material-cell">
-        <div class="label">Material Standard</div>
-        <div class="value" style="font-size:12px;margin-top:4px;" id="material-standard">&mdash;</div>
-      </div>
-    </div>
-    <div class="material-row">
-      <div class="material-cell">
-        <div class="label">Outside Proc Type</div>
-        <div class="value" style="font-size:12px;margin-top:4px;" id="outside-proc-type">&mdash;</div>
-      </div>
-      <div class="material-cell">
-        <div class="label">Mil Spec</div>
-        <div class="value" style="font-size:12px;margin-top:4px;" id="mil-spec">&mdash;</div>
-      </div>
-      <div class="material-cell">
-        <div class="label">Additional Spec</div>
-        <div class="value" style="font-size:12px;margin-top:4px;" id="add-spec">&mdash;</div>
       </div>
     </div>
 
@@ -1485,33 +1445,36 @@
     const ops = currentTravelerData.operations || [];
 
     const partRow = {
-      'part-name':         domVal('part-name'),
-      'part-number':       domVal('part-number'),
-      'part-rev':          domVal('part-rev'),
-      'approved-print':    domVal('approved-print'),
-      'material':          domVal('material'),
-      'material-grade':    domVal('material-grade'),
-      'material-standard': domVal('material-standard'),
-      'outside-proc-type': domVal('outside-proc-type'),
-      'mil-spec':          domVal('mil-spec'),
-      'add-spec':          domVal('add-spec'),
-      'routing':           '1',
-      'customer-id':       domVal('customer-id'),
+      'part-name':      domVal('part-name'),
+      'part-number':    domVal('part-number'),
+      'part-rev':       domVal('part-rev'),
+      'approved-print': domVal('approved-print'),
+      'material':       domVal('material'),
+      'routing':        '1',
+      'customer-id':    domVal('customer-id'),
     };
 
     const resourceSelects = document.querySelectorAll('#ops-tbody select.resource-select');
+    const PART_FIELDS = new Set(['part-name','part-number','part-rev','approved-print','material','routing','customer-id']);
 
     const fields = Object.keys(m);
     const header = fields.map(f => csvCell(m[f])).join(',');
 
     const rows = ops.map((op, i) => {
+      const isOp10 = op.opNumber === '10';
+      const isOP   = isOutsideProc(op.resource);
       const opRow = {
-        'op-number':      op.opNumber    || '',
-        'op-brief':       op.brief       || '',
-        'op-description': op.description || '',
-        'op-resource':    resourceSelects[i] ? resourceSelects[i].value : (op.resource || ''),
+        'op-number':         op.opNumber    || '',
+        'op-brief':          op.brief       || '',
+        'op-description':    op.description || '',
+        'op-resource':       resourceSelects[i] ? resourceSelects[i].value : (op.resource || ''),
+        'material-grade':    isOp10 ? (currentTravelerData.materialGrade    || '') : '',
+        'material-standard': isOp10 ? (currentTravelerData.materialStandard || '') : '',
+        'outside-proc-type': isOP   ? (op.outsideProcessingType || '') : '',
+        'mil-spec':          isOP   ? (op.milSpec || '') : '',
+        'add-spec':          isOP   ? (op.additionalSpecOptions || '') : '',
       };
-      return fields.map(f => csvCell(f.startsWith('op-') ? opRow[f] : partRow[f])).join(',');
+      return fields.map(f => csvCell(PART_FIELDS.has(f) ? partRow[f] : opRow[f])).join(',');
     });
 
     if (!rows.length) {
@@ -1629,13 +1592,15 @@ Your process:
 
 Title block extraction: pull part name, part number, revision, material spec, and any finish/coating callouts visible. Use "" for anything not shown.
 
-Material and finish fields:
+Material fields (part level — from title block):
 - material: base material only (e.g. "4140 Steel", "6061 Aluminum", "303 SS")
 - materialGrade: grade/temper/condition if specified (e.g. "4140", "T6", "Annealed") — "" if not called out
 - materialStandard: governing spec if shown (e.g. "AMS 6349", "ASTM B209", "MIL-S-5626") — "" if not shown
-- outsideProcessingType: finishing/treatment type (e.g. "Black Oxide", "Hard Anodize", "Heat Treat") — "" if none
-- milSpec: military or government spec for the finish (e.g. "MIL-DTL-13924", "MIL-A-8625 Type III") — "" if none
-- additionalSpecOptions: extra finish spec options or classes (e.g. "Class 1", "Class 4") — "" if none
+
+Outside processing fields (operation level — set only on OUTSIDE PROC operations):
+- outsideProcessingType: finish/treatment type on that op (e.g. "Black Oxide", "Hard Anodize", "Heat Treat") — "" on all other ops
+- milSpec: military/government spec for that finish (e.g. "MIL-DTL-13924", "MIL-A-8625 Type III") — "" on all other ops
+- additionalSpecOptions: extra options/classes for that finish (e.g. "Class 1", "Class 4") — "" on all other ops
 
 Return ONLY valid JSON — no markdown, no explanation:
 
@@ -1646,9 +1611,6 @@ Return ONLY valid JSON — no markdown, no explanation:
   "material": "",
   "materialGrade": "",
   "materialStandard": "",
-  "outsideProcessingType": "",
-  "milSpec": "",
-  "additionalSpecOptions": "",
   "approvedPrint": "",
   "operations": [
     {
@@ -1656,14 +1618,20 @@ Return ONLY valid JSON — no markdown, no explanation:
       "brief": "Program, model part",
       "description": "Part Programming / Modeling – create CNC programs and setup sheets",
       "resource": "CNC LATHE",
-      "notes": ""
+      "notes": "",
+      "outsideProcessingType": "",
+      "milSpec": "",
+      "additionalSpecOptions": ""
     },
     {
       "opNumber": "20",
       "brief": "Face, turn OD",
       "description": "Lathe Op 1 – Face both ends, turn major OD, drill/bore ID",
       "resource": "CNC LATHE",
-      "notes": ""
+      "notes": "",
+      "outsideProcessingType": "",
+      "milSpec": "",
+      "additionalSpecOptions": ""
     }
   ]
 }
@@ -1768,12 +1736,9 @@ Return ONLY valid JSON:
       "material": "",
       "materialGrade": "",
       "materialStandard": "",
-      "outsideProcessingType": "",
-      "milSpec": "",
-      "additionalSpecOptions": "",
       "approvedPrint": "",
       "operations": [
-        { "opNumber": "10", "brief": "Program, model part", "description": "Part Programming / Modeling – create CNC programs and setup sheets", "resource": "CNC LATHE", "notes": "" }
+        { "opNumber": "10", "brief": "Program, model part", "description": "Part Programming / Modeling – create CNC programs and setup sheets", "resource": "CNC LATHE", "notes": "", "outsideProcessingType": "", "milSpec": "", "additionalSpecOptions": "" }
       ]
     }
   ]
@@ -1786,9 +1751,7 @@ Rules:
 - material: base material only (e.g. "4140 Steel", "6061 Aluminum", "303 SS")
 - materialGrade: grade/temper/condition if specified (e.g. "4140", "T6", "Annealed") — "" if not called out
 - materialStandard: governing spec if shown (e.g. "AMS 6349", "ASTM B209", "MIL-S-5626") — "" if not shown
-- outsideProcessingType: finishing/treatment type (e.g. "Black Oxide", "Hard Anodize", "Heat Treat") — "" if none
-- milSpec: military or government spec for the finish (e.g. "MIL-DTL-13924", "MIL-A-8625 Type III") — "" if none
-- additionalSpecOptions: extra finish spec options or classes (e.g. "Class 1", "Class 4") — "" if none
+- outsideProcessingType / milSpec / additionalSpecOptions: set on OUTSIDE PROC operations only — the finish type, mil spec, and extra options for that specific op; use "" on all other ops
 - Return raw JSON only, no code fences`;
 
     const content = [
@@ -1860,10 +1823,19 @@ Rules:
       const notes = op.dueDate
         ? `<span class="due-cell">Due ${esc(op.dueDate)}</span>${op.notes ? ' ' + esc(op.notes) : ''}`
         : esc(op.notes || '');
+      let detail = '';
+      if (op.opNumber === '10') {
+        const parts = [d.materialGrade, d.materialStandard].filter(Boolean);
+        if (parts.length) detail = `<div class="op-detail">${esc(parts.join(' · '))}</div>`;
+      }
+      if (isOutsideProc(op.resource)) {
+        const parts = [op.outsideProcessingType, op.milSpec, op.additionalSpecOptions].filter(Boolean);
+        if (parts.length) detail = `<div class="op-detail">${esc(parts.join(' · '))}</div>`;
+      }
       return `<tr>
         <td><span class="op-num">${esc(op.opNumber)}</span></td>
         <td>${esc(op.brief || '')}</td>
-        <td>${esc(op.description)}</td>
+        <td>${esc(op.description)}${detail}</td>
         <td><span class="resource">${esc(op.resource)}</span></td>
         <td style="text-align:center;">&#9744;</td>
         <td>${notes}</td>
@@ -1891,13 +1863,6 @@ Rules:
   </div>
   <div class="material-row">
     <div class="material-cell"><div class="label">Material</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.material) || '&mdash;'}</div></div>
-    <div class="material-cell"><div class="label">Material Grade</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.materialGrade) || '&mdash;'}</div></div>
-    <div class="material-cell"><div class="label">Material Standard</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.materialStandard) || '&mdash;'}</div></div>
-  </div>
-  <div class="material-row">
-    <div class="material-cell"><div class="label">Outside Proc Type</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.outsideProcessingType) || '&mdash;'}</div></div>
-    <div class="material-cell"><div class="label">Mil Spec</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.milSpec) || '&mdash;'}</div></div>
-    <div class="material-cell"><div class="label">Additional Spec</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.additionalSpecOptions) || '&mdash;'}</div></div>
   </div>
   <div class="ops-section">
     <table class="ops-table">
@@ -1918,12 +1883,7 @@ Rules:
     set('part-name',          d.partName);
     set('part-number',        d.partNumber);
     set('part-rev',           d.revision);
-    set('material',          d.material);
-    set('material-grade',    d.materialGrade          || '');
-    set('material-standard', d.materialStandard        || '');
-    set('outside-proc-type', d.outsideProcessingType   || '');
-    set('mil-spec',          d.milSpec                 || '');
-    set('add-spec',          d.additionalSpecOptions   || '');
+    set('material', d.material);
     set('approved-print',     d.approvedPrint);
     set('wo-number',          '');
     set('wo-must-leave',      '');
@@ -1951,10 +1911,19 @@ Rules:
       const notes = op.dueDate
         ? `<span class="due-cell">Due ${esc(op.dueDate)}</span>${op.notes ? ' ' + esc(op.notes) : ''}`
         : esc(op.notes || '');
+      let detail = '';
+      if (op.opNumber === '10' && currentTravelerData) {
+        const parts = [currentTravelerData.materialGrade, currentTravelerData.materialStandard].filter(Boolean);
+        if (parts.length) detail = `<div class="op-detail">${esc(parts.join(' · '))}</div>`;
+      }
+      if (isOutsideProc(op.resource)) {
+        const parts = [op.outsideProcessingType, op.milSpec, op.additionalSpecOptions].filter(Boolean);
+        if (parts.length) detail = `<div class="op-detail">${esc(parts.join(' · '))}</div>`;
+      }
       return `<tr>
         <td><span class="op-num">${esc(op.opNumber)}</span></td>
         <td>${esc(op.brief || '')}</td>
-        <td>${esc(op.description)}</td>
+        <td>${esc(op.description)}${detail}</td>
         <td><select class="resource-select" onchange="this.closest('td').dataset.resource=this.value">${optionsHTML}</select></td>
         <td style="text-align:center;">&#9744;</td>
         <td>${notes}</td>
