@@ -1920,7 +1920,15 @@ Rules:
       return;
     }
     const types = getOpTypes();
-    const optionsHTML = types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    const makeOptions = (selected) => {
+      let opts = types.map(t =>
+        `<option value="${esc(t)}"${t === selected ? ' selected' : ''}>${esc(t)}</option>`
+      ).join('');
+      if (selected && !types.includes(selected)) {
+        opts = `<option value="${esc(selected)}" selected>${esc(selected)}</option>` + opts;
+      }
+      return opts;
+    };
     tbody.innerHTML = ops.map(op => {
       const notes = op.dueDate
         ? `<span class="due-cell">Due ${esc(op.dueDate)}</span>${op.notes ? ' ' + esc(op.notes) : ''}`
@@ -1938,15 +1946,11 @@ Rules:
         <td><span class="op-num">${esc(op.opNumber)}</span></td>
         <td>${esc(op.brief || '')}</td>
         <td>${esc(op.description)}${detail}</td>
-        <td><select class="resource-select" onchange="this.closest('td').dataset.resource=this.value">${optionsHTML}</select></td>
+        <td><select class="resource-select" onchange="this.closest('td').dataset.resource=this.value">${makeOptions(op.resource || '')}</select></td>
         <td style="text-align:center;">&#9744;</td>
         <td>${notes}</td>
       </tr>`;
     }).join('');
-    // Set each select to the current resource value
-    tbody.querySelectorAll('select.resource-select').forEach((sel, i) => {
-      sel.value = ops[i].resource || '';
-    });
   }
 
   // ── Override panel ───────────────────────────────────────────────────────
