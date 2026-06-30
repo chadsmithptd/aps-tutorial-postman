@@ -1427,7 +1427,7 @@ Op numbering rules:
 - Op 2010: ALWAYS last — "Shipping", resource: SHIP
 - Do NOT add DEBURR, INSPECT, or SHIP ops in the middle routing
 
-Resource options: CNC LATHE | VMC | HMC | SURFACE GRIND | CYLINDRICAL GRIND | EDM | DEBURR | INSPECT | OUTSIDE PROC | SHIP
+Resource options: ${getOpTypes().join(' | ')}
 "brief": 3-5 word quick label (e.g., "Face, turn OD", "Mill pockets, slots", "Cylindrical grind ID", "Outside anodize")
 "description": full verbose setup description — "Setup Name – features machined"
 Use "" for notes unless there is a critical tolerance or special instruction worth flagging.
@@ -1484,7 +1484,7 @@ For EACH IMAGE (referenced by its 0-based position index):
 
 3. Assembly/sub-assembly items: generate assembly routing (Resource: ASSEMBLY). Typical ops: Op 10 Part Programming / Modeling, then stage/verify components, install sub-assemblies by name, torque fasteners. End with Op 2000 Final Inspection (INSPECT) and Op 2010 Shipping (SHIP).
 
-4. Make items: generate complete CNC machining routing. Study all views, dimensions, tolerances, GD&T, surface finish. Group by logical setups (one clamping = one op). Sequence: raw stock → rough → finish → grind → outside process. Resources: CNC LATHE | VMC | HMC | SURFACE GRIND | CYLINDRICAL GRIND | EDM | DEBURR | INSPECT | OUTSIDE PROC | SHIP
+4. Make items: generate complete CNC machining routing. Study all views, dimensions, tolerances, GD&T, surface finish. Group by logical setups (one clamping = one op). Sequence: raw stock → rough → finish → grind → outside process. Resources: ${getOpTypes().join(' | ')}
 
 5. Purchase items: extract vendor/description from BOM table on the assembly drawing.
 
