@@ -1438,62 +1438,74 @@
   }
 
   function downloadCSV() {
-    if (!currentTravelerData) {
-      alert('Upload a blueprint first.');
-      return;
-    }
     const custId = domVal('customer-id');
     if (!custId) {
       alert('Please enter a Customer ID before exporting.');
       return;
     }
-    const m   = getCsvMapping();
-    const ops = currentTravelerData.operations || [];
 
-    const partRow = {
-      'part-name':      domVal('part-name'),
-      'part-number':    domVal('part-number'),
-      'part-rev':       domVal('part-rev'),
-      'approved-print': domVal('approved-print'),
-      'routing':        '1',
-      'customer-id':    custId,
-      'wo-ref':         custId + '-' + domVal('part-number'),
-    };
+    // Gather all traveler data objects based on current mode
+    let travelers;
+    if (activeMode === 'batch') {
+      travelers = batchResults.filter(r => r && r.data).map(r => r.data);
+    } else if (activeMode === 'packet') {
+      travelers = allItems.length ? allItems : (currentTravelerData ? [currentTravelerData] : []);
+    } else {
+      if (!currentTravelerData) { alert('Upload a blueprint first.'); return; }
+      travelers = [currentTravelerData];
+    }
+    if (!travelers.length) { alert('No blueprint data to export.'); return; }
 
-    const resourceSelects = document.querySelectorAll('#ops-tbody select.resource-select');
-    const PART_FIELDS = new Set(['part-name','part-number','part-rev','approved-print','routing','customer-id','wo-ref']);
-
+    const m      = getCsvMapping();
     const fields = Object.keys(m);
     const header = fields.map(f => csvCell(m[f])).join(',');
+    const PART_FIELDS = new Set(['part-name','part-number','part-rev','approved-print','routing','customer-id','wo-ref']);
 
-    const rows = ops.map((op, i) => {
-      const isOp10 = op.opNumber === '10';
-      const isOP   = isOutsideProc(op.resource);
-      const opRow = {
-        'op-number':         op.opNumber    || '',
-        'op-brief':          op.brief       || '',
-        'op-description':    op.description || '',
-        'op-resource':       resourceSelects[i] ? resourceSelects[i].value : (op.resource || ''),
-        'material':          isOp10 ? domVal('material') : '',
-        'material-grade':    isOp10 ? (currentTravelerData.materialGrade    || '') : '',
-        'material-standard': isOp10 ? (currentTravelerData.materialStandard || '') : '',
-        'outside-proc-type': isOP   ? (op.outsideProcessingType || '') : '',
-        'mil-spec':          isOP   ? (op.milSpec || '') : '',
-        'add-spec':          isOP   ? (op.additionalSpecOptions || '') : '',
+    // DOM selects only valid for the currently displayed traveler
+    const resourceSelects = document.querySelectorAll('#ops-tbody select.resource-select');
+
+    const allRows = travelers.flatMap(d => {
+      const isCurrent = d === currentTravelerData;
+      const partRow = {
+        'part-name':      d.partName      || '',
+        'part-number':    d.partNumber    || '',
+        'part-rev':       d.revision      || '',
+        'approved-print': d.approvedPrint || '',
+        'routing':        '1',
+        'customer-id':    custId,
+        'wo-ref':         custId + '-' + (d.partNumber || ''),
       };
-      return fields.map(f => csvCell(PART_FIELDS.has(f) ? partRow[f] : opRow[f])).join(',');
+      const ops  = d.operations || [];
+      const rows = ops.map((op, i) => {
+        const isOp10 = op.opNumber === '10';
+        const isOP   = isOutsideProc(op.resource);
+        const opRow = {
+          'op-number':         op.opNumber    || '',
+          'op-brief':          op.brief       || '',
+          'op-description':    op.description || '',
+          'op-resource':       isCurrent && resourceSelects[i] ? resourceSelects[i].value : (op.resource || ''),
+          'material':          isOp10 ? (isCurrent ? domVal('material') : (d.material || '')) : '',
+          'material-grade':    isOp10 ? (d.materialGrade    || '') : '',
+          'material-standard': isOp10 ? (d.materialStandard || '') : '',
+          'outside-proc-type': isOP   ? (op.outsideProcessingType || '') : '',
+          'mil-spec':          isOP   ? (op.milSpec || '') : '',
+          'add-spec':          isOP   ? (op.additionalSpecOptions || '') : '',
+        };
+        return fields.map(f => csvCell(PART_FIELDS.has(f) ? partRow[f] : opRow[f])).join(',');
+      });
+      if (!rows.length) rows.push(fields.map(f => csvCell(partRow[f] ?? '')).join(','));
+      return rows;
     });
 
-    if (!rows.length) {
-      rows.push(fields.map(f => csvCell(partRow[f] ?? '')).join(','));
-    }
-
-    const csv  = [header, ...rows].join('\r\n');
+    const csv      = [header, ...allRows].join('\r\n');
+    const filename = travelers.length === 1
+      ? 'traveler_' + (travelers[0].partNumber || 'export').replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv'
+      : 'travelers_export.csv';
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = 'traveler_' + (currentTravelerData.partNumber || 'export').replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv';
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   }
