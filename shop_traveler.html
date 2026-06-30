@@ -1578,10 +1578,10 @@
     const expanded = [];
     for (const op of middle) {
       if (isOutsideProc(op.resource)) {
-        expanded.push(synth('Outgoing Inspection (OP)', 'INSPECT'));
-        expanded.push(synth('Shipping (OP)', 'SHIP'));
+        expanded.push(synth('Outgoing Inspection (OP)', 'INSPECTION'));
+        expanded.push(synth('Shipping (OP)', 'SHIPPING'));
         expanded.push(op);
-        expanded.push(synth('Incoming Inspection (OP)', 'INSPECT'));
+        expanded.push(synth('Incoming Inspection (OP)', 'INSPECTION'));
       } else {
         expanded.push(op);
       }
