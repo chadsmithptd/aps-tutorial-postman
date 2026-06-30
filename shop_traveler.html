@@ -519,7 +519,7 @@
 
   .material-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     border-bottom: 2px solid #000;
   }
 
@@ -528,6 +528,11 @@
     border-right: 1px solid #000;
   }
   .material-cell:last-child { border-right: none; }
+
+  .customer-id-row { display: flex; align-items: center; gap: 10px; padding: 4px 10px; background: #f7f7f7; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+  .customer-id-row .label { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+  .customer-id-input { font-size: 13px; font-weight: 600; border: none; border-bottom: 1px dashed #aaa; background: transparent; flex: 1; padding: 2px 4px; color: #1a1a1a; }
+  .customer-id-input:focus { outline: none; border-bottom-color: #3a6a3a; }
 
   .ops-table { width: 100%; border-collapse: collapse; }
   .ops-table thead tr { background: #222; color: #fff; }
@@ -811,12 +816,28 @@
       <input type="text" data-target="raw-stock-qty" placeholder="e.g. 40">
     </div>
     <div class="override-field override-wide">
-      <label>Material / Part Stock</label>
-      <textarea data-target="material" rows="2" placeholder="e.g. Aluminum 6061-T6 AMS-4027"></textarea>
+      <label>Material</label>
+      <input type="text" data-target="material" placeholder="e.g. 4140 Steel">
+    </div>
+    <div class="override-field">
+      <label>Material Grade</label>
+      <input type="text" data-target="material-grade" placeholder="e.g. Annealed, T6">
+    </div>
+    <div class="override-field">
+      <label>Material Standard</label>
+      <input type="text" data-target="material-standard" placeholder="e.g. AMS 6349, ASTM B209">
     </div>
     <div class="override-field override-wide">
-      <label>Outside Processing</label>
-      <textarea data-target="outside-processing" rows="2" placeholder="e.g. Anodize"></textarea>
+      <label>Outside Proc Type</label>
+      <input type="text" data-target="outside-proc-type" placeholder="e.g. Black Oxide, Hard Anodize">
+    </div>
+    <div class="override-field">
+      <label>Mil Spec</label>
+      <input type="text" data-target="mil-spec" placeholder="e.g. MIL-DTL-13924">
+    </div>
+    <div class="override-field">
+      <label>Additional Spec</label>
+      <input type="text" data-target="add-spec" placeholder="e.g. Class 1">
     </div>
   </div>
 </div>
@@ -839,21 +860,23 @@
     <span class="csv-map-label">Part Name</span>         <input class="csv-map-input" data-field="part-name">
     <span class="csv-map-label">Part Number</span>       <input class="csv-map-input" data-field="part-number">
     <span class="csv-map-label">Revision</span>          <input class="csv-map-input" data-field="part-rev">
-    <span class="csv-map-label">Material</span>          <input class="csv-map-input" data-field="material">
-    <span class="csv-map-label">Outside Processing</span><input class="csv-map-input" data-field="outside-processing">
-    <span class="csv-map-label">Qty Ordered</span>       <input class="csv-map-input" data-field="qty-ordered">
-    <span class="csv-map-label">Raw Stock Qty</span>     <input class="csv-map-input" data-field="raw-stock-qty">
     <span class="csv-map-label">Approved Print</span>    <input class="csv-map-input" data-field="approved-print">
-    <div class="csv-map-group-label">Work Order</div>
-    <span class="csv-map-label">Work Order #</span>      <input class="csv-map-input" data-field="wo-number">
-    <span class="csv-map-label">WO Must Leave By</span>  <input class="csv-map-input" data-field="wo-must-leave">
-    <span class="csv-map-label">Customer Due</span>      <input class="csv-map-input" data-field="customer-due">
+    <div class="csv-map-group-label">Material</div>
+    <span class="csv-map-label">Material</span>          <input class="csv-map-input" data-field="material">
+    <span class="csv-map-label">Material Grade</span>    <input class="csv-map-input" data-field="material-grade">
+    <span class="csv-map-label">Material Standard</span> <input class="csv-map-input" data-field="material-standard">
+    <div class="csv-map-group-label">Outside Processing</div>
+    <span class="csv-map-label">Type</span>              <input class="csv-map-input" data-field="outside-proc-type">
+    <span class="csv-map-label">Mil Spec</span>          <input class="csv-map-input" data-field="mil-spec">
+    <span class="csv-map-label">Additional Spec</span>   <input class="csv-map-input" data-field="add-spec">
+    <div class="csv-map-group-label">Generic</div>
+    <span class="csv-map-label">Routing</span>           <input class="csv-map-input" data-field="routing">
+    <span class="csv-map-label">Customer ID</span>       <input class="csv-map-input" data-field="customer-id">
     <div class="csv-map-group-label">Operation (per row)</div>
     <span class="csv-map-label">Op #</span>              <input class="csv-map-input" data-field="op-number">
-    <span class="csv-map-label">Description (brief)</span><input class="csv-map-input" data-field="op-brief">
-    <span class="csv-map-label">Operation (verbose)</span><input class="csv-map-input" data-field="op-description">
+    <span class="csv-map-label">Description</span>       <input class="csv-map-input" data-field="op-brief">
+    <span class="csv-map-label">Operation</span>         <input class="csv-map-input" data-field="op-description">
     <span class="csv-map-label">Resource</span>          <input class="csv-map-input" data-field="op-resource">
-    <span class="csv-map-label">Notes</span>             <input class="csv-map-input" data-field="op-notes">
   </div>
   <button class="btn-config-add" style="margin-top:10px;" onclick="saveCsvMapping(event)">&#10003; Save Mapping</button>
 </div>
@@ -929,14 +952,37 @@
       </div>
     </div>
 
+    <div class="customer-id-row">
+      <div class="label">Customer ID</div>
+      <input type="text" id="customer-id" class="customer-id-input" placeholder="Enter customer ID&hellip;">
+    </div>
+
     <div class="material-row">
       <div class="material-cell">
-        <div class="label">Material / Part Stock</div>
+        <div class="label">Material</div>
         <div class="value" style="font-size:12px;margin-top:4px;" id="material">&mdash;</div>
       </div>
       <div class="material-cell">
-        <div class="label">Outside Processing</div>
-        <div class="value" style="font-size:12px;margin-top:4px;" id="outside-processing">&mdash;</div>
+        <div class="label">Material Grade</div>
+        <div class="value" style="font-size:12px;margin-top:4px;" id="material-grade">&mdash;</div>
+      </div>
+      <div class="material-cell">
+        <div class="label">Material Standard</div>
+        <div class="value" style="font-size:12px;margin-top:4px;" id="material-standard">&mdash;</div>
+      </div>
+    </div>
+    <div class="material-row">
+      <div class="material-cell">
+        <div class="label">Outside Proc Type</div>
+        <div class="value" style="font-size:12px;margin-top:4px;" id="outside-proc-type">&mdash;</div>
+      </div>
+      <div class="material-cell">
+        <div class="label">Mil Spec</div>
+        <div class="value" style="font-size:12px;margin-top:4px;" id="mil-spec">&mdash;</div>
+      </div>
+      <div class="material-cell">
+        <div class="label">Additional Spec</div>
+        <div class="value" style="font-size:12px;margin-top:4px;" id="add-spec">&mdash;</div>
       </div>
     </div>
 
@@ -1360,28 +1406,34 @@
 
   // ── CSV Export ───────────────────────────────────────────────────────────
   const DEFAULT_CSV_MAPPING = {
-    'part-name':          'PART_NAME',
-    'part-number':        'PART_NUMBER',
-    'part-rev':           'REVISION',
-    'material':           'MATERIAL',
-    'outside-processing': 'OUTSIDE_PROCESSING',
-    'qty-ordered':        'QTY_ORDERED',
-    'raw-stock-qty':      'RAW_STOCK_QTY',
-    'approved-print':     'APPROVED_PRINT',
-    'wo-number':          'WO_NUMBER',
-    'wo-must-leave':      'MUST_LEAVE_DATE',
-    'customer-due':       'CUSTOMER_DUE_DATE',
-    'op-number':          'OP_NUMBER',
-    'op-brief':           'OP_BRIEF',
-    'op-description':     'OP_DESCRIPTION',
-    'op-resource':        'RESOURCE',
-    'op-notes':           'OP_NOTES',
+    'part-name':         'PART_NAME',
+    'part-number':       'PART_NUMBER',
+    'part-rev':          'REVISION',
+    'approved-print':    'APPROVED_PRINT',
+    'material':          'MATERIAL',
+    'material-grade':    'MATERIAL_GRADE',
+    'material-standard': 'MATERIAL_STANDARD',
+    'outside-proc-type': 'OUTSIDE_PROC_TYPE',
+    'mil-spec':          'MIL_SPEC',
+    'add-spec':          'ADDITIONAL_SPEC_OPTIONS',
+    'routing':           'ROUTING',
+    'customer-id':       'CUSTOMER_ID',
+    'op-number':         'OP_NUMBER',
+    'op-brief':          'OP_BRIEF',
+    'op-description':    'OP_DESCRIPTION',
+    'op-resource':       'RESOURCE',
   };
 
   function getCsvMapping() {
     try {
       const s = localStorage.getItem('aps-csv-mapping');
-      if (s) return JSON.parse(s);
+      if (s) {
+        const saved = JSON.parse(s);
+        const defKeys = Object.keys(DEFAULT_CSV_MAPPING);
+        const savedKeys = Object.keys(saved);
+        const isStale = defKeys.some(k => !(k in saved)) || savedKeys.some(k => !(k in DEFAULT_CSV_MAPPING));
+        if (!isStale) return saved;
+      }
     } catch(e) {}
     return { ...DEFAULT_CSV_MAPPING };
   }
@@ -1415,7 +1467,12 @@
   function domVal(id) {
     const el = document.getElementById(id);
     if (!el) return '';
-    const t = el.tagName === 'SELECT' ? el.value : el.textContent;
+    let t;
+    if (el.tagName === 'SELECT' || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      t = el.value;
+    } else {
+      t = el.textContent;
+    }
     return (t === '—' || t === '—') ? '' : (t || '');
   }
 
@@ -1428,17 +1485,18 @@
     const ops = currentTravelerData.operations || [];
 
     const partRow = {
-      'part-name':          domVal('part-name'),
-      'part-number':        domVal('part-number'),
-      'part-rev':           domVal('part-rev'),
-      'material':           domVal('material'),
-      'outside-processing': domVal('outside-processing'),
-      'qty-ordered':        domVal('qty-ordered'),
-      'raw-stock-qty':      domVal('raw-stock-qty'),
-      'approved-print':     domVal('approved-print'),
-      'wo-number':          domVal('wo-number'),
-      'wo-must-leave':      domVal('wo-must-leave'),
-      'customer-due':       domVal('customer-due'),
+      'part-name':         domVal('part-name'),
+      'part-number':       domVal('part-number'),
+      'part-rev':          domVal('part-rev'),
+      'approved-print':    domVal('approved-print'),
+      'material':          domVal('material'),
+      'material-grade':    domVal('material-grade'),
+      'material-standard': domVal('material-standard'),
+      'outside-proc-type': domVal('outside-proc-type'),
+      'mil-spec':          domVal('mil-spec'),
+      'add-spec':          domVal('add-spec'),
+      'routing':           '1',
+      'customer-id':       domVal('customer-id'),
     };
 
     const resourceSelects = document.querySelectorAll('#ops-tbody select.resource-select');
@@ -1452,7 +1510,6 @@
         'op-brief':       op.brief       || '',
         'op-description': op.description || '',
         'op-resource':    resourceSelects[i] ? resourceSelects[i].value : (op.resource || ''),
-        'op-notes':       op.notes       || '',
       };
       return fields.map(f => csvCell(f.startsWith('op-') ? opRow[f] : partRow[f])).join(',');
     });
@@ -1572,6 +1629,14 @@ Your process:
 
 Title block extraction: pull part name, part number, revision, material spec, and any finish/coating callouts visible. Use "" for anything not shown.
 
+Material and finish fields:
+- material: base material only (e.g. "4140 Steel", "6061 Aluminum", "303 SS")
+- materialGrade: grade/temper/condition if specified (e.g. "4140", "T6", "Annealed") — "" if not called out
+- materialStandard: governing spec if shown (e.g. "AMS 6349", "ASTM B209", "MIL-S-5626") — "" if not shown
+- outsideProcessingType: finishing/treatment type (e.g. "Black Oxide", "Hard Anodize", "Heat Treat") — "" if none
+- milSpec: military or government spec for the finish (e.g. "MIL-DTL-13924", "MIL-A-8625 Type III") — "" if none
+- additionalSpecOptions: extra finish spec options or classes (e.g. "Class 1", "Class 4") — "" if none
+
 Return ONLY valid JSON — no markdown, no explanation:
 
 {
@@ -1579,7 +1644,11 @@ Return ONLY valid JSON — no markdown, no explanation:
   "partNumber": "",
   "revision": "",
   "material": "",
-  "outsideProcessing": "",
+  "materialGrade": "",
+  "materialStandard": "",
+  "outsideProcessingType": "",
+  "milSpec": "",
+  "additionalSpecOptions": "",
   "approvedPrint": "",
   "operations": [
     {
@@ -1697,7 +1766,11 @@ Return ONLY valid JSON:
       "parentPartNumber": null,
       "childPartNumbers": [],
       "material": "",
-      "outsideProcessing": "",
+      "materialGrade": "",
+      "materialStandard": "",
+      "outsideProcessingType": "",
+      "milSpec": "",
+      "additionalSpecOptions": "",
       "approvedPrint": "",
       "operations": [
         { "opNumber": "10", "brief": "Program, model part", "description": "Part Programming / Modeling – create CNC programs and setup sheets", "resource": "CNC LATHE", "notes": "" }
@@ -1710,6 +1783,12 @@ Rules:
 - sourceImageIndex: 0-based index of the image this item came from (null for purchase items not shown as drawings)
 - parentPartNumber: null only for the single top-level assembly
 - Use "" for any field not visible
+- material: base material only (e.g. "4140 Steel", "6061 Aluminum", "303 SS")
+- materialGrade: grade/temper/condition if specified (e.g. "4140", "T6", "Annealed") — "" if not called out
+- materialStandard: governing spec if shown (e.g. "AMS 6349", "ASTM B209", "MIL-S-5626") — "" if not shown
+- outsideProcessingType: finishing/treatment type (e.g. "Black Oxide", "Hard Anodize", "Heat Treat") — "" if none
+- milSpec: military or government spec for the finish (e.g. "MIL-DTL-13924", "MIL-A-8625 Type III") — "" if none
+- additionalSpecOptions: extra finish spec options or classes (e.g. "Class 1", "Class 4") — "" if none
 - Return raw JSON only, no code fences`;
 
     const content = [
@@ -1811,8 +1890,14 @@ Rules:
     </div>
   </div>
   <div class="material-row">
-    <div class="material-cell"><div class="label">Material / Part Stock</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.material) || '&mdash;'}</div></div>
-    <div class="material-cell"><div class="label">Outside Processing</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.outsideProcessing) || '&mdash;'}</div></div>
+    <div class="material-cell"><div class="label">Material</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.material) || '&mdash;'}</div></div>
+    <div class="material-cell"><div class="label">Material Grade</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.materialGrade) || '&mdash;'}</div></div>
+    <div class="material-cell"><div class="label">Material Standard</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.materialStandard) || '&mdash;'}</div></div>
+  </div>
+  <div class="material-row">
+    <div class="material-cell"><div class="label">Outside Proc Type</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.outsideProcessingType) || '&mdash;'}</div></div>
+    <div class="material-cell"><div class="label">Mil Spec</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.milSpec) || '&mdash;'}</div></div>
+    <div class="material-cell"><div class="label">Additional Spec</div><div class="value" style="font-size:12px;margin-top:4px;">${esc(d.additionalSpecOptions) || '&mdash;'}</div></div>
   </div>
   <div class="ops-section">
     <table class="ops-table">
@@ -1833,8 +1918,12 @@ Rules:
     set('part-name',          d.partName);
     set('part-number',        d.partNumber);
     set('part-rev',           d.revision);
-    set('material',           d.material);
-    set('outside-processing', d.outsideProcessing);
+    set('material',          d.material);
+    set('material-grade',    d.materialGrade          || '');
+    set('material-standard', d.materialStandard        || '');
+    set('outside-proc-type', d.outsideProcessingType   || '');
+    set('mil-spec',          d.milSpec                 || '');
+    set('add-spec',          d.additionalSpecOptions   || '');
     set('approved-print',     d.approvedPrint);
     set('wo-number',          '');
     set('wo-must-leave',      '');
