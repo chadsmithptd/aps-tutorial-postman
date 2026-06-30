@@ -211,6 +211,42 @@
   }
   .btn-config-add:hover { background: #2a4a2a; }
 
+  /* CSV mapping section inside config panel */
+  .config-divider { border: none; border-top: 1px solid #dde; margin: 16px 0; }
+  .config-hint { font-size: 11px; color: #777; margin-bottom: 10px; }
+  #csv-mapping-grid {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 5px 12px;
+    align-items: center;
+  }
+  .csv-map-group-label {
+    grid-column: 1 / -1;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #3a6a3a;
+    margin-top: 8px;
+    padding-top: 4px;
+    border-top: 1px solid #e8f0e8;
+  }
+  .csv-map-group-label:first-child { border-top: none; margin-top: 0; }
+  .csv-map-label { font-size: 11px; color: #444; }
+  .csv-map-input {
+    font-size: 11px;
+    font-family: monospace;
+    padding: 3px 6px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    width: 100%;
+  }
+  .csv-map-input:focus {
+    outline: none;
+    border-color: #3a6a3a;
+    box-shadow: 0 0 0 2px rgba(58,106,58,0.15);
+  }
+
   /* Resource select in ops table */
   .ops-table select.resource-select {
     font-size: 10px;
@@ -722,6 +758,9 @@
   <button class="btn btn-print" onclick="window.print()">
     &#128438; Print
   </button>
+  <button class="btn btn-print" onclick="downloadCSV()">
+    &#8659; Export CSV
+  </button>
 </div>
 
 <!-- Mode prompt (2+ files selected) -->
@@ -791,6 +830,32 @@
            onkeydown="if(event.key==='Enter')addOpType()">
     <button class="btn-config-add" onclick="addOpType()">+ Add</button>
   </div>
+
+  <hr class="config-divider">
+  <div class="config-panel-title" style="margin-top:0;">&#8659; CSV Column Mapping</div>
+  <p class="config-hint">Map each traveler field to the exact column header your ERP/system expects. One CSV row per operation; part fields repeat on every row.</p>
+  <div id="csv-mapping-grid">
+    <div class="csv-map-group-label">Part Info</div>
+    <span class="csv-map-label">Part Name</span>         <input class="csv-map-input" data-field="part-name">
+    <span class="csv-map-label">Part Number</span>       <input class="csv-map-input" data-field="part-number">
+    <span class="csv-map-label">Revision</span>          <input class="csv-map-input" data-field="part-rev">
+    <span class="csv-map-label">Material</span>          <input class="csv-map-input" data-field="material">
+    <span class="csv-map-label">Outside Processing</span><input class="csv-map-input" data-field="outside-processing">
+    <span class="csv-map-label">Qty Ordered</span>       <input class="csv-map-input" data-field="qty-ordered">
+    <span class="csv-map-label">Raw Stock Qty</span>     <input class="csv-map-input" data-field="raw-stock-qty">
+    <span class="csv-map-label">Approved Print</span>    <input class="csv-map-input" data-field="approved-print">
+    <div class="csv-map-group-label">Work Order</div>
+    <span class="csv-map-label">Work Order #</span>      <input class="csv-map-input" data-field="wo-number">
+    <span class="csv-map-label">WO Must Leave By</span>  <input class="csv-map-input" data-field="wo-must-leave">
+    <span class="csv-map-label">Customer Due</span>      <input class="csv-map-input" data-field="customer-due">
+    <div class="csv-map-group-label">Operation (per row)</div>
+    <span class="csv-map-label">Op #</span>              <input class="csv-map-input" data-field="op-number">
+    <span class="csv-map-label">Description (brief)</span><input class="csv-map-input" data-field="op-brief">
+    <span class="csv-map-label">Operation (verbose)</span><input class="csv-map-input" data-field="op-description">
+    <span class="csv-map-label">Resource</span>          <input class="csv-map-input" data-field="op-resource">
+    <span class="csv-map-label">Notes</span>             <input class="csv-map-input" data-field="op-notes">
+  </div>
+  <button class="btn-config-add" style="margin-top:10px;" onclick="saveCsvMapping(event)">&#10003; Save Mapping</button>
 </div>
 
 <!-- Blueprint preview (single mode) -->
@@ -950,6 +1015,7 @@
   let batchResults        = [];   // batch mode [{data, imageDataUrl, error}]
   let packetImageDataUrls = [];   // packet mode: dataUrl per sourceImageIndex
   let activeMode          = null; // 'single'|'batch'|'packet'
+  let currentTravelerData = null; // last populateTraveler() payload, for CSV export
 
   apiKeyInput.value = localStorage.getItem('anthropic_api_key') || '';
   apiKeyInput.addEventListener('change', () => {
@@ -1285,10 +1351,124 @@
     batchResults = [];
     packetImageDataUrls = [];
     activeMode = null;
+    currentTravelerData = null;
   }
 
   function hideModePrompt() {
     document.getElementById('mode-prompt').style.display = 'none';
+  }
+
+  // ── CSV Export ───────────────────────────────────────────────────────────
+  const DEFAULT_CSV_MAPPING = {
+    'part-name':          'PART_NAME',
+    'part-number':        'PART_NUMBER',
+    'part-rev':           'REVISION',
+    'material':           'MATERIAL',
+    'outside-processing': 'OUTSIDE_PROCESSING',
+    'qty-ordered':        'QTY_ORDERED',
+    'raw-stock-qty':      'RAW_STOCK_QTY',
+    'approved-print':     'APPROVED_PRINT',
+    'wo-number':          'WO_NUMBER',
+    'wo-must-leave':      'MUST_LEAVE_DATE',
+    'customer-due':       'CUSTOMER_DUE_DATE',
+    'op-number':          'OP_NUMBER',
+    'op-brief':           'OP_BRIEF',
+    'op-description':     'OP_DESCRIPTION',
+    'op-resource':        'RESOURCE',
+    'op-notes':           'OP_NOTES',
+  };
+
+  function getCsvMapping() {
+    try {
+      const s = localStorage.getItem('aps-csv-mapping');
+      if (s) return JSON.parse(s);
+    } catch(e) {}
+    return { ...DEFAULT_CSV_MAPPING };
+  }
+
+  function saveCsvMapping(evt) {
+    const m = {};
+    document.querySelectorAll('#csv-mapping-grid .csv-map-input').forEach(inp => {
+      m[inp.dataset.field] = inp.value.trim() || DEFAULT_CSV_MAPPING[inp.dataset.field] || inp.dataset.field;
+    });
+    localStorage.setItem('aps-csv-mapping', JSON.stringify(m));
+    const btn = evt.currentTarget;
+    const orig = btn.textContent;
+    btn.textContent = '✓ Saved!';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  }
+
+  function loadCsvMappingIntoPanel() {
+    const m = getCsvMapping();
+    document.querySelectorAll('#csv-mapping-grid .csv-map-input').forEach(inp => {
+      inp.value = m[inp.dataset.field] ?? DEFAULT_CSV_MAPPING[inp.dataset.field] ?? '';
+    });
+  }
+
+  function csvCell(val) {
+    const s = String(val ?? '');
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? '"' + s.replace(/"/g, '""') + '"'
+      : s;
+  }
+
+  function domVal(id) {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    const t = el.tagName === 'SELECT' ? el.value : el.textContent;
+    return (t === '—' || t === '—') ? '' : (t || '');
+  }
+
+  function downloadCSV() {
+    if (!currentTravelerData) {
+      alert('Upload a blueprint first.');
+      return;
+    }
+    const m   = getCsvMapping();
+    const ops = currentTravelerData.operations || [];
+
+    const partRow = {
+      'part-name':          domVal('part-name'),
+      'part-number':        domVal('part-number'),
+      'part-rev':           domVal('part-rev'),
+      'material':           domVal('material'),
+      'outside-processing': domVal('outside-processing'),
+      'qty-ordered':        domVal('qty-ordered'),
+      'raw-stock-qty':      domVal('raw-stock-qty'),
+      'approved-print':     domVal('approved-print'),
+      'wo-number':          domVal('wo-number'),
+      'wo-must-leave':      domVal('wo-must-leave'),
+      'customer-due':       domVal('customer-due'),
+    };
+
+    const resourceSelects = document.querySelectorAll('#ops-tbody select.resource-select');
+
+    const fields = Object.keys(m);
+    const header = fields.map(f => csvCell(m[f])).join(',');
+
+    const rows = ops.map((op, i) => {
+      const opRow = {
+        'op-number':      op.opNumber    || '',
+        'op-brief':       op.brief       || '',
+        'op-description': op.description || '',
+        'op-resource':    resourceSelects[i] ? resourceSelects[i].value : (op.resource || ''),
+        'op-notes':       op.notes       || '',
+      };
+      return fields.map(f => csvCell(f.startsWith('op-') ? opRow[f] : partRow[f])).join(',');
+    });
+
+    if (!rows.length) {
+      rows.push(fields.map(f => csvCell(partRow[f] ?? '')).join(','));
+    }
+
+    const csv  = [header, ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'traveler_' + (currentTravelerData.partNumber || 'export').replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   // ── Config: Operation Types ──────────────────────────────────────────────
@@ -1345,7 +1525,7 @@
     panel.style.display = show ? 'block' : 'none';
     btn.classList.toggle('active', show);
     btn.textContent = show ? '✕ Close Config' : '⚙ Config';
-    if (show) renderOpTypeList();
+    if (show) { renderOpTypeList(); loadCsvMappingIntoPanel(); }
   }
 
   // ── Op post-processing: enforce bookend numbers + outside proc spacing ────
@@ -1649,6 +1829,7 @@ Rules:
 
   // ── Traveler population ──────────────────────────────────────────────────
   function populateTraveler(d) {
+    currentTravelerData = d;
     set('part-name',          d.partName);
     set('part-number',        d.partNumber);
     set('part-rev',           d.revision);
