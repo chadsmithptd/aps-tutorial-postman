@@ -1563,27 +1563,34 @@
   function postProcessOps(ops) {
     if (!ops || ops.length < 3) return ops || [];
 
-    const first  = { ...ops[0], opNumber: '10' };
-    const last2  = [
+    const first = { ...ops[0], opNumber: '10' };
+    const last2 = [
       { ...ops[ops.length - 2], opNumber: '2000' },
       { ...ops[ops.length - 1], opNumber: '2010' }
     ];
     const middle = ops.slice(1, -2);
 
-    let num = 20;
-    const renumbered = middle.map((op, i) => {
-      if (i > 0) {
-        const prevIsOut = isOutsideProc(middle[i - 1].resource);
-        const curIsOut  = isOutsideProc(op.resource);
-        if      (prevIsOut && curIsOut) num += 40; // consecutive outside: skip 3
-        else if (prevIsOut)             num += 30; // after outside: skip 2
-        else if (curIsOut)              num += 20; // before outside: skip 1
-        else                            num += 10; // normal
-      }
-      return { ...op, opNumber: String(num) };
+    const synth = (brief, resource) => ({
+      opNumber: '', brief, description: '', resource, notes: '',
+      outsideProcessingType: '', milSpec: '', additionalSpecOptions: ''
     });
 
-    return [first, ...renumbered, ...last2];
+    const expanded = [];
+    for (const op of middle) {
+      if (isOutsideProc(op.resource)) {
+        expanded.push(synth('Outgoing Inspection (OP)', 'INSPECT'));
+        expanded.push(synth('Shipping (OP)', 'SHIP'));
+        expanded.push(op);
+        expanded.push(synth('Incoming Inspection (OP)', 'INSPECT'));
+      } else {
+        expanded.push(op);
+      }
+    }
+
+    let num = 20;
+    const final = expanded.map(op => { const o = { ...op, opNumber: String(num) }; num += 10; return o; });
+
+    return [first, ...final, ...last2];
   }
 
   // ── API: single image ────────────────────────────────────────────────────
