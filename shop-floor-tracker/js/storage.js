@@ -2,55 +2,90 @@
 
 const STORAGE_KEYS = {
   seedVersion: "sft.seedVersion",
-  tasks: "sft.tasks",
+  operations: "sft.operations",
   currentOperatorId: "sft.currentOperatorId",
   currentWorkstationId: "sft.currentWorkstationId",
-  activeTaskId: "sft.activeTaskId",
+  activeJobId: "sft.activeJobId",
+  activeOperationIdByJob: "sft.activeOperationIdByJob",
 };
 
 function ensureSeeded() {
   const storedVersion = localStorage.getItem(STORAGE_KEYS.seedVersion);
-  const storedTasks = localStorage.getItem(STORAGE_KEYS.tasks);
+  const storedOperations = localStorage.getItem(STORAGE_KEYS.operations);
 
-  if (storedVersion !== String(SEED_DATA.version) || !storedTasks) {
-    const liveTasks = SEED_DATA.TASKS.map((task) => ({
-      ...task,
+  if (storedVersion !== String(SEED_DATA.version) || !storedOperations) {
+    const liveOperations = SEED_DATA.OPERATIONS.map((op) => ({
+      ...op,
       status: "pending",
       accumulatedSeconds: 0,
       runningStartTs: null,
       completedAtTs: null,
       logEntries: [],
     }));
-    localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(liveTasks));
+    localStorage.setItem(STORAGE_KEYS.operations, JSON.stringify(liveOperations));
     localStorage.setItem(STORAGE_KEYS.seedVersion, String(SEED_DATA.version));
   }
 }
 
-function getTasks() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEYS.tasks) || "[]");
+function getOperations() {
+  return JSON.parse(localStorage.getItem(STORAGE_KEYS.operations) || "[]");
 }
 
-function saveTasks(tasks) {
-  localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks));
+function saveOperations(operations) {
+  localStorage.setItem(STORAGE_KEYS.operations, JSON.stringify(operations));
 }
 
-function getTasksForOperator(operatorId) {
-  return getTasks()
-    .filter((t) => t.operatorId === operatorId)
+function getOperationsForJob(jobId) {
+  return getOperations()
+    .filter((o) => o.jobId === jobId)
     .sort((a, b) => a.order - b.order);
 }
 
-function getTaskById(taskId) {
-  return getTasks().find((t) => t.id === taskId) || null;
+function getOperationById(operationId) {
+  return getOperations().find((o) => o.id === operationId) || null;
 }
 
-function updateTask(updatedTask) {
-  const tasks = getTasks();
-  const index = tasks.findIndex((t) => t.id === updatedTask.id);
+function updateOperation(updatedOperation) {
+  const operations = getOperations();
+  const index = operations.findIndex((o) => o.id === updatedOperation.id);
   if (index !== -1) {
-    tasks[index] = updatedTask;
-    saveTasks(tasks);
+    operations[index] = updatedOperation;
+    saveOperations(operations);
   }
+}
+
+function getJobs() {
+  return SEED_DATA.JOBS.slice();
+}
+
+function getJobsForOperator(operatorId) {
+  return getJobs()
+    .filter((j) => j.operatorId === operatorId)
+    .sort((a, b) => a.order - b.order);
+}
+
+function getJobById(jobId) {
+  return SEED_DATA.JOBS.find((j) => j.id === jobId) || null;
+}
+
+function getJobProgress(jobId) {
+  const operations = getOperationsForJob(jobId);
+  const total = operations.length;
+  const completeCount = operations.filter((o) => o.status === "complete").length;
+  const anyStarted = operations.some(
+    (o) => o.status === "in-progress" || o.status === "paused" || o.status === "complete"
+  );
+
+  let aggregateStatus;
+  if (total > 0 && completeCount === total) {
+    aggregateStatus = "complete";
+  } else if (anyStarted) {
+    aggregateStatus = "in-progress";
+  } else {
+    aggregateStatus = "pending";
+  }
+
+  return { completeCount, total, aggregateStatus };
 }
 
 function getCurrentOperatorId() {
@@ -66,12 +101,23 @@ function setCurrentSelection(operatorId, workstationId) {
   localStorage.setItem(STORAGE_KEYS.currentWorkstationId, workstationId);
 }
 
-function getActiveTaskId() {
-  return localStorage.getItem(STORAGE_KEYS.activeTaskId);
+function getActiveJobId() {
+  return localStorage.getItem(STORAGE_KEYS.activeJobId);
 }
 
-function setActiveTaskId(taskId) {
-  localStorage.setItem(STORAGE_KEYS.activeTaskId, taskId);
+function setActiveJobId(jobId) {
+  localStorage.setItem(STORAGE_KEYS.activeJobId, jobId);
+}
+
+function getActiveOperationIdForJob(jobId) {
+  const map = JSON.parse(localStorage.getItem(STORAGE_KEYS.activeOperationIdByJob) || "{}");
+  return map[jobId] || null;
+}
+
+function setActiveOperationIdForJob(jobId, operationId) {
+  const map = JSON.parse(localStorage.getItem(STORAGE_KEYS.activeOperationIdByJob) || "{}");
+  map[jobId] = operationId;
+  localStorage.setItem(STORAGE_KEYS.activeOperationIdByJob, JSON.stringify(map));
 }
 
 function findOperator(operatorId) {

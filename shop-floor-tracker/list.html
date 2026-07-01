@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Today's Tasks — Shop Floor Tracker</title>
+  <title>Jobs — Shop Floor Tracker</title>
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -18,8 +18,14 @@
 
   <main class="main">
     <a class="back-link" href="index.html">&larr; Switch operator/workstation</a>
+    <input
+      type="text"
+      class="search-input"
+      id="jobSearchInput"
+      placeholder="Search jobs by name, work order, or product..."
+    />
     <div class="list-summary" id="listSummary"></div>
-    <div class="task-row-list" id="taskRowList"></div>
+    <div class="job-row-list" id="jobRowList"></div>
   </main>
 
   <script src="js/data.js"></script>

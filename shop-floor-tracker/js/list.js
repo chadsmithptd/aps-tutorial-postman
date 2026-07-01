@@ -1,4 +1,4 @@
-// Task list screen controller (list.html)
+// Jobs list screen controller (list.html)
 
 ensureSeeded();
 
@@ -12,6 +12,8 @@ const operatorId = getOperatorIdFromContext();
 if (!operatorId) {
   window.location.href = "index.html";
 }
+
+let searchTerm = "";
 
 function renderClock() {
   const el = document.getElementById("clock");
@@ -31,46 +33,57 @@ function statusLabel(status) {
   return status.replace("-", " ").toUpperCase();
 }
 
-function renderTaskList() {
-  const tasks = getTasksForOperator(operatorId);
-  const container = document.getElementById("taskRowList");
+function matchesSearch(job) {
+  if (!searchTerm) return true;
+  const haystack = `${job.name} ${job.workOrderNo} ${job.productName}`.toLowerCase();
+  return haystack.includes(searchTerm.toLowerCase());
+}
+
+function renderJobList() {
+  const allJobs = getJobsForOperator(operatorId);
+  const jobs = allJobs.filter(matchesSearch);
+  const container = document.getElementById("jobRowList");
   container.innerHTML = "";
 
-  const completeCount = tasks.filter((t) => t.status === "complete").length;
-  document.getElementById("listSummary").textContent =
-    `${completeCount} of ${tasks.length} complete`;
+  const completeJobs = allJobs.filter((j) => getJobProgress(j.id).aggregateStatus === "complete").length;
+  let summaryText = `${completeJobs} of ${allJobs.length} jobs complete`;
+  if (searchTerm) {
+    summaryText += ` — showing ${jobs.length} match${jobs.length === 1 ? "" : "es"}`;
+  }
+  document.getElementById("listSummary").textContent = summaryText;
 
-  tasks.forEach((task) => {
-    const segment = findSegment(task.segmentId);
-    const elapsed = getElapsedSeconds(task);
+  jobs.forEach((job) => {
+    const progress = getJobProgress(job.id);
 
     const row = document.createElement("button");
-    row.className = "task-row";
+    row.className = "job-row";
     row.innerHTML = `
-      <span class="task-row-number">${task.opNumber}</span>
-      <span class="task-row-info">
-        <span class="task-row-name">${task.name}</span>
-        <span class="task-row-sub">
-          <span>${task.category}</span>
-          ${segment ? `<span class="badge badge-segment">${segment.name}</span>` : ""}
+      <span class="job-row-info">
+        <span class="job-row-name">${job.name}</span>
+        <span class="job-row-sub">
+          <span>${job.workOrderNo}</span>
+          <span>${job.productName}</span>
         </span>
       </span>
-      <span class="badge badge-status ${task.status}">${statusLabel(task.status)}</span>
-      <span class="task-row-time">
-        <strong>${formatHMS(elapsed)}</strong> / ${formatMS(task.targetSeconds)}
-      </span>
+      <span class="job-row-progress">${progress.completeCount} of ${progress.total} operations complete</span>
+      <span class="badge badge-status ${progress.aggregateStatus}">${statusLabel(progress.aggregateStatus)}</span>
     `;
     row.addEventListener("click", () => {
-      window.location.href = `task.html?taskId=${encodeURIComponent(task.id)}`;
+      window.location.href = `job.html?jobId=${encodeURIComponent(job.id)}`;
     });
     container.appendChild(row);
   });
 }
 
+document.getElementById("jobSearchInput").addEventListener("input", (e) => {
+  searchTerm = e.target.value;
+  renderJobList();
+});
+
 renderHeader();
-renderTaskList();
+renderJobList();
 renderClock();
 setInterval(() => {
   renderClock();
-  renderTaskList();
+  renderJobList();
 }, 1000);

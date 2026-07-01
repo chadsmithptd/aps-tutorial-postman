@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job — Shop Floor Tracker</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-brand">Shop Floor Tracker</div>
+    <div class="topbar-meta">
+      <span>WORKSTATION: <strong id="workstationLabel">--</strong></span>
+      <span>OPERATOR: <strong id="operatorLabel">--</strong></span>
+      <span class="topbar-clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <a class="back-link" href="#" id="backLink">&larr; Back to job list</a>
+
+    <div class="job-header">
+      <span class="job-header-name" id="jobHeaderName"></span>
+      <span class="job-header-sub" id="jobHeaderSub"></span>
+    </div>
+
+    <div class="workspace-layout">
+      <div class="workspace-sidebar">
+        <div class="workspace-sidebar-header">Operations</div>
+        <div class="operation-row-list" id="operationRowList"></div>
+      </div>
+
+      <div class="workspace-main">
+        <div class="detail-main">
+          <span class="detail-op-number" id="detailOpNumber"></span>
+          <h1 class="detail-name" id="detailName"></h1>
+          <span class="detail-category" id="detailCategory"></span>
+          <span class="badge badge-segment" id="detailSegment" style="width: fit-content;"></span>
+          <p class="detail-description" id="detailDescription"></p>
+        </div>
+
+        <div class="control-bar">
+          <div class="control-step">
+            <span class="control-status">
+              <span class="status-dot" id="statusDot"></span>
+              <span id="statusText">--</span>
+            </span>
+            <span id="stepLabel">Step --</span>
+          </div>
+
+          <div class="control-readout">
+            <span class="control-elapsed" id="elapsedReadout">00:00</span>
+          </div>
+
+          <div class="control-target">
+            TAKT
+            <strong id="targetReadout">--</strong>
+          </div>
+
+          <div class="control-spacer"></div>
+
+          <button class="btn-toggle start" id="toggleBtn">Start</button>
+          <button class="btn-complete" id="completeBtn">Complete</button>
+        </div>
+      </div>
+
+      <div class="workspace-parts">
+        <div class="parts-list">
+          <div class="parts-list-header">Required Inputs</div>
+          <div id="partsListBody"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/timer.js"></script>
+  <script src="js/job.js"></script>
+</body>
+</html>
