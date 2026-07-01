@@ -86,6 +86,22 @@ window.addEventListener("PartViewerReady", () => {
   }
 });
 
+// If js/viewer.js never even loads (blocked script, CORS under file://, etc.),
+// window.PartViewer will never exist at all. Surface that instead of leaving
+// the panel silently blank.
+setTimeout(() => {
+  if (!window.PartViewer) {
+    const container = document.getElementById("viewerCanvasWrap");
+    if (container) {
+      container.innerHTML =
+        '<div class="viewer-error">3D viewer script did not load. If you opened this file directly ' +
+        "(file://), try serving it from a local server instead " +
+        "(<code>python3 -m http.server</code> from the shop-floor-tracker folder), or check the " +
+        "browser console for the exact error.</div>";
+    }
+  }
+}, 4000);
+
 function renderOperationList() {
   const operations = getOperationsForJob(job.id);
   const container = document.getElementById("operationRowList");

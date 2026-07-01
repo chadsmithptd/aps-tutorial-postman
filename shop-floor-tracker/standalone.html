@@ -177,6 +177,10 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim);
   background: rgba(14, 17, 22, 0.7); padding: 4px 10px; border-radius: 4px; pointer-events: none;
 }
+.viewer-error {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 24px; color: var(--text-dim); font-size: 0.9rem;
+}
 
 .parts-list { flex: 1; overflow-y: auto; }
 .parts-list-header {
@@ -754,6 +758,15 @@ window.addEventListener("PartViewerReady", () => {
     pendingViewerUpdate = null;
   }
 });
+setTimeout(() => {
+  if (!window.PartViewer) {
+    const container = document.getElementById("viewerCanvasWrap");
+    if (container) {
+      container.innerHTML =
+        '<div class="viewer-error">3D viewer script did not load. Check the browser console for the exact error.</div>';
+    }
+  }
+}, 4000);
 function renderMiddlePanel() {
   const operation = getOperationById(currentOperationId);
   if (!operation) return;
@@ -2267,15 +2280,27 @@ export { OrbitControls };
 
 <script type="module">
 (async function () {
-  const threeSrc = document.getElementById("threeSrcData").textContent;
-  const threeBlobUrl = URL.createObjectURL(new Blob([threeSrc], { type: "text/javascript" }));
-  const THREE = await import(threeBlobUrl);
+  let THREE, OrbitControls;
+  try {
+    const threeSrc = document.getElementById("threeSrcData").textContent;
+    const threeBlobUrl = URL.createObjectURL(new Blob([threeSrc], { type: "text/javascript" }));
+    THREE = await import(threeBlobUrl);
 
-  const orbitSrc = document
-    .getElementById("orbitControlsSrcData")
-    .textContent.replace("from 'three'", `from '${threeBlobUrl}'`);
-  const orbitBlobUrl = URL.createObjectURL(new Blob([orbitSrc], { type: "text/javascript" }));
-  const { OrbitControls } = await import(orbitBlobUrl);
+    const orbitSrc = document
+      .getElementById("orbitControlsSrcData")
+      .textContent.replace("from 'three'", `from '${threeBlobUrl}'`);
+    const orbitBlobUrl = URL.createObjectURL(new Blob([orbitSrc], { type: "text/javascript" }));
+    ({ OrbitControls } = await import(orbitBlobUrl));
+  } catch (err) {
+    console.error("[PartViewer] failed to load embedded Three.js:", err);
+    window.PartViewer = { ready: false, error: String(err), showModel() {}, resetView() {} };
+    const container = document.getElementById("viewerCanvasWrap");
+    if (container) {
+      container.innerHTML =
+        '<div class="viewer-error">3D viewer failed to load in this browser: ' + err.message + "</div>";
+    }
+    return;
+  }
 
   const COLOR_BASE = 0x8b94a3;
   const COLOR_ACCENT = 0x3ba7f2;
@@ -2408,55 +2433,85 @@ export { OrbitControls };
     return builder();
   }
 
+  function showError(container, message) {
+    const errorEl = document.createElement("div");
+    errorEl.className = "viewer-error";
+    errorEl.textContent = message;
+    container.appendChild(errorEl);
+    window.PartViewer.error = message;
+    console.error("[PartViewer]", message);
+  }
+
+  function isWebGLAvailable() {
+    try {
+      const testCanvas = document.createElement("canvas");
+      return !!(
+        window.WebGLRenderingContext &&
+        (testCanvas.getContext("webgl2") || testCanvas.getContext("webgl") || testCanvas.getContext("experimental-webgl"))
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
   function init() {
     const container = document.getElementById("viewerCanvasWrap");
     if (!container) return;
 
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(COLOR_BG);
-
-    const rect = container.getBoundingClientRect();
-    const width = rect.width || 400;
-    const height = rect.height || 280;
-
-    camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.copy(defaultCameraPosition);
-    camera.lookAt(defaultTarget);
-
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(width, height, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-    dirLight.position.set(3, 4, 5);
-    scene.add(dirLight);
-
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.enablePan = false;
-    controls.minDistance = 1.5;
-    controls.maxDistance = 12;
-    controls.target.copy(defaultTarget);
-    controls.update();
-
-    const resetBtn = document.getElementById("viewerResetBtn");
-    if (resetBtn) resetBtn.addEventListener("click", resetView);
-
-    const resizeObserver = new ResizeObserver(() => handleResize(container));
-    resizeObserver.observe(container);
-    window.addEventListener("resize", () => handleResize(container));
-
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
+    if (!isWebGLAvailable()) {
+      showError(container, "3D viewer unavailable: this browser does not have WebGL enabled.");
+      return;
     }
-    animate();
 
-    window.PartViewer.ready = true;
-    window.dispatchEvent(new CustomEvent("PartViewerReady"));
+    try {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(COLOR_BG);
+
+      const rect = container.getBoundingClientRect();
+      const width = rect.width || 400;
+      const height = rect.height || 280;
+
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+      camera.position.copy(defaultCameraPosition);
+      camera.lookAt(defaultTarget);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(width, height, false);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+      dirLight.position.set(3, 4, 5);
+      scene.add(dirLight);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.enablePan = false;
+      controls.minDistance = 1.5;
+      controls.maxDistance = 12;
+      controls.target.copy(defaultTarget);
+      controls.update();
+
+      const resetBtn = document.getElementById("viewerResetBtn");
+      if (resetBtn) resetBtn.addEventListener("click", resetView);
+
+      const resizeObserver = new ResizeObserver(() => handleResize(container));
+      resizeObserver.observe(container);
+      window.addEventListener("resize", () => handleResize(container));
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.PartViewer.ready = true;
+      window.dispatchEvent(new CustomEvent("PartViewerReady"));
+    } catch (err) {
+      showError(container, `3D viewer failed to start: ${err.message}`);
+    }
   }
 
   function handleResize(container) {

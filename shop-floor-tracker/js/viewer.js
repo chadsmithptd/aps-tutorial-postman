@@ -143,55 +143,85 @@ function buildModel(modelType) {
   return builder();
 }
 
+function showError(container, message) {
+  const errorEl = document.createElement("div");
+  errorEl.className = "viewer-error";
+  errorEl.textContent = message;
+  container.appendChild(errorEl);
+  window.PartViewer.error = message;
+  console.error("[PartViewer]", message);
+}
+
+function isWebGLAvailable() {
+  try {
+    const testCanvas = document.createElement("canvas");
+    return !!(
+      window.WebGLRenderingContext &&
+      (testCanvas.getContext("webgl2") || testCanvas.getContext("webgl") || testCanvas.getContext("experimental-webgl"))
+    );
+  } catch (e) {
+    return false;
+  }
+}
+
 function init() {
   const container = document.getElementById("viewerCanvasWrap");
   if (!container) return;
 
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(COLOR_BG);
-
-  const rect = container.getBoundingClientRect();
-  const width = rect.width || 400;
-  const height = rect.height || 280;
-
-  camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-  camera.position.copy(defaultCameraPosition);
-  camera.lookAt(defaultTarget);
-
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(width, height, false);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  container.appendChild(renderer.domElement);
-
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-  dirLight.position.set(3, 4, 5);
-  scene.add(dirLight);
-
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.enablePan = false;
-  controls.minDistance = 1.5;
-  controls.maxDistance = 12;
-  controls.target.copy(defaultTarget);
-  controls.update();
-
-  const resetBtn = document.getElementById("viewerResetBtn");
-  if (resetBtn) resetBtn.addEventListener("click", resetView);
-
-  const resizeObserver = new ResizeObserver(() => handleResize(container));
-  resizeObserver.observe(container);
-  window.addEventListener("resize", () => handleResize(container));
-
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
+  if (!isWebGLAvailable()) {
+    showError(container, "3D viewer unavailable: this browser does not have WebGL enabled.");
+    return;
   }
-  animate();
 
-  window.PartViewer.ready = true;
-  window.dispatchEvent(new CustomEvent("PartViewerReady"));
+  try {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(COLOR_BG);
+
+    const rect = container.getBoundingClientRect();
+    const width = rect.width || 400;
+    const height = rect.height || 280;
+
+    camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    camera.position.copy(defaultCameraPosition);
+    camera.lookAt(defaultTarget);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height, false);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(3, 4, 5);
+    scene.add(dirLight);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.enablePan = false;
+    controls.minDistance = 1.5;
+    controls.maxDistance = 12;
+    controls.target.copy(defaultTarget);
+    controls.update();
+
+    const resetBtn = document.getElementById("viewerResetBtn");
+    if (resetBtn) resetBtn.addEventListener("click", resetView);
+
+    const resizeObserver = new ResizeObserver(() => handleResize(container));
+    resizeObserver.observe(container);
+    window.addEventListener("resize", () => handleResize(container));
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.PartViewer.ready = true;
+    window.dispatchEvent(new CustomEvent("PartViewerReady"));
+  } catch (err) {
+    showError(container, `3D viewer failed to start: ${err.message}`);
+  }
 }
 
 function handleResize(container) {
