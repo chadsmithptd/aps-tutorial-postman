@@ -61,6 +61,31 @@ function statusLabel(status) {
   return status.replace("-", " ").toUpperCase();
 }
 
+function deriveModelFileName(operation) {
+  const slug = operation.name.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const numericSuffix = (operation.id.match(/\d+/) || [""])[0];
+  return `${slug}-${numericSuffix}.step`;
+}
+
+let pendingViewerUpdate = null;
+
+function updateViewer(operation) {
+  if (!operation) return;
+  const fileName = deriveModelFileName(operation);
+  if (window.PartViewer && window.PartViewer.ready) {
+    window.PartViewer.showModel(operation.modelType, fileName);
+  } else {
+    pendingViewerUpdate = { modelType: operation.modelType, fileName };
+  }
+}
+
+window.addEventListener("PartViewerReady", () => {
+  if (pendingViewerUpdate) {
+    window.PartViewer.showModel(pendingViewerUpdate.modelType, pendingViewerUpdate.fileName);
+    pendingViewerUpdate = null;
+  }
+});
+
 function renderOperationList() {
   const operations = getOperationsForJob(job.id);
   const container = document.getElementById("operationRowList");
@@ -86,6 +111,8 @@ function renderOperationList() {
 function renderMiddlePanel() {
   const operation = getOperationById(currentOperationId);
   if (!operation) return;
+
+  updateViewer(operation);
 
   const segment = findSegment(operation.segmentId);
   document.getElementById("detailOpNumber").textContent = `OP ${operation.opNumber}`;

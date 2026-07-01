@@ -114,6 +114,7 @@ const SEED_DATA = {
       description: "Retrieve and stage all engine assembly parts at the workstation.",
       targetSeconds: 420,
       order: 1,
+      modelType: "crate",
       parts: [
         { partId: "PT-ENGMOUNT", qty: 1 },
         { partId: "PT-NAS14N", qty: 1 },
@@ -131,6 +132,7 @@ const SEED_DATA = {
       description: "Set up the assembly fixture and align the frame for engine mounting.",
       targetSeconds: 420,
       order: 2,
+      modelType: "housing-block",
       parts: [
         { partId: "PT-WASHER", qty: 4 },
         { partId: "PT-NAS15N", qty: 2 },
@@ -148,6 +150,7 @@ const SEED_DATA = {
       description: "Install engine mounts and torque to spec.",
       targetSeconds: 420,
       order: 3,
+      modelType: "bracket",
       parts: [
         { partId: "PT-ENGMOUNT", qty: 2 },
         { partId: "PT-BLASTSHIELD", qty: 1 },
@@ -165,6 +168,7 @@ const SEED_DATA = {
       description: "Route and connect motor wiring harness, secure with clips.",
       targetSeconds: 420,
       order: 4,
+      modelType: "tube-assembly",
       parts: [
         { partId: "PT-FUELLINE", qty: 1 },
         { partId: "PT-VAPORTUBE", qty: 1 },
@@ -182,6 +186,7 @@ const SEED_DATA = {
       description: "Verify engine alignment against jig tolerances and log readings.",
       targetSeconds: 300,
       order: 5,
+      modelType: "flat-tag",
       parts: [{ partId: "PT-INSPECTTAG", qty: 1 }],
     },
     {
@@ -196,6 +201,7 @@ const SEED_DATA = {
       description: "Perform final visual and torque-stripe inspection before sign-off.",
       targetSeconds: 300,
       order: 6,
+      modelType: "flat-tag",
       parts: [{ partId: "PT-INSPECTTAG", qty: 1 }],
     },
 
@@ -212,6 +218,7 @@ const SEED_DATA = {
       description: "Remove existing engine components and inspect for wear or damage.",
       targetSeconds: 360,
       order: 1,
+      modelType: "housing-block",
       parts: [{ partId: "PT-INSPECTTAG", qty: 1 }],
     },
     {
@@ -226,6 +233,7 @@ const SEED_DATA = {
       description: "Install replacement engine mounts and torque to spec.",
       targetSeconds: 420,
       order: 2,
+      modelType: "bracket",
       parts: [
         { partId: "PT-ENGMOUNT", qty: 2 },
         { partId: "PT-NAS14N", qty: 2 },
@@ -243,6 +251,7 @@ const SEED_DATA = {
       description: "Re-terminate motor wiring harness connections and secure routing.",
       targetSeconds: 420,
       order: 3,
+      modelType: "tube-assembly",
       parts: [
         { partId: "PT-FUELLINE", qty: 1 },
         { partId: "PT-VAPORTUBE", qty: 1 },
@@ -260,6 +269,7 @@ const SEED_DATA = {
       description: "Perform final visual and torque-stripe inspection before sign-off.",
       targetSeconds: 300,
       order: 4,
+      modelType: "flat-tag",
       parts: [{ partId: "PT-INSPECTTAG", qty: 1 }],
     },
 
@@ -276,6 +286,7 @@ const SEED_DATA = {
       description: "Retrieve wing spar and inspect for shipping damage before staging.",
       targetSeconds: 360,
       order: 1,
+      modelType: "crate",
       parts: [{ partId: "PT-SPAR", qty: 1 }],
     },
     {
@@ -290,6 +301,7 @@ const SEED_DATA = {
       description: "Fit skin panels to the spar and clamp in position.",
       targetSeconds: 480,
       order: 2,
+      modelType: "panel",
       parts: [
         { partId: "PT-SKIN", qty: 2 },
         { partId: "PT-SEALANT", qty: 1 },
@@ -307,6 +319,7 @@ const SEED_DATA = {
       description: "Drill and set rivets along the skin-to-spar seam per pattern.",
       targetSeconds: 600,
       order: 3,
+      modelType: "fastener-array",
       parts: [{ partId: "PT-RIVET", qty: 24 }],
     },
     {
@@ -321,6 +334,7 @@ const SEED_DATA = {
       description: "Install control surface hinges and check freedom of movement.",
       targetSeconds: 420,
       order: 4,
+      modelType: "hinge-assembly",
       parts: [
         { partId: "PT-HINGE", qty: 2 },
         { partId: "PT-NAS14N", qty: 4 },
@@ -338,6 +352,7 @@ const SEED_DATA = {
       description: "Mask fasteners and clean surfaces in preparation for paint.",
       targetSeconds: 300,
       order: 5,
+      modelType: "panel",
       parts: [{ partId: "PT-SEALANT", qty: 1 }],
     },
     {
@@ -352,6 +367,7 @@ const SEED_DATA = {
       description: "Complete quality checklist and tag the assembly for hand-off.",
       targetSeconds: 300,
       order: 6,
+      modelType: "flat-tag",
       parts: [{ partId: "PT-INSPECTTAG", qty: 1 }],
     },
 
@@ -368,6 +384,7 @@ const SEED_DATA = {
       description: "Retrieve wing spar and inspect for shipping damage before staging.",
       targetSeconds: 360,
       order: 1,
+      modelType: "crate",
       parts: [{ partId: "PT-SPAR", qty: 1 }],
     },
     {
@@ -382,6 +399,7 @@ const SEED_DATA = {
       description: "Fit skin panels to the spar and clamp in position.",
       targetSeconds: 480,
       order: 2,
+      modelType: "panel",
       parts: [
         { partId: "PT-SKIN", qty: 2 },
         { partId: "PT-SEALANT", qty: 1 },
@@ -399,6 +417,7 @@ const SEED_DATA = {
       description: "Drill and set rivets along the skin-to-spar seam per pattern.",
       targetSeconds: 600,
       order: 3,
+      modelType: "fastener-array",
       parts: [{ partId: "PT-RIVET", qty: 24 }],
     },
     {
@@ -413,6 +432,7 @@ const SEED_DATA = {
       description: "Install control surface hinges and check freedom of movement.",
       targetSeconds: 420,
       order: 4,
+      modelType: "hinge-assembly",
       parts: [
         { partId: "PT-HINGE", qty: 2 },
         { partId: "PT-NAS14N", qty: 4 },
@@ -430,6 +450,7 @@ const SEED_DATA = {
       description: "Complete quality checklist and tag the assembly for hand-off.",
       targetSeconds: 300,
       order: 5,
+      modelType: "flat-tag",
       parts: [{ partId: "PT-INSPECTTAG", qty: 1 }],
     },
 
@@ -446,6 +467,7 @@ const SEED_DATA = {
       description: "Clear and stage the payload bay for fit-out.",
       targetSeconds: 360,
       order: 1,
+      modelType: "crate",
       parts: [{ partId: "PT-NAS15N", qty: 4 }],
     },
     {
@@ -460,6 +482,7 @@ const SEED_DATA = {
       description: "Install mounting brackets and secure with washers per spec.",
       targetSeconds: 420,
       order: 2,
+      modelType: "bracket",
       parts: [
         { partId: "PT-ENGMOUNT", qty: 1 },
         { partId: "PT-WASHER", qty: 4 },
@@ -477,6 +500,7 @@ const SEED_DATA = {
       description: "Apply sealant and complete final inspection of the payload bay.",
       targetSeconds: 300,
       order: 3,
+      modelType: "flat-tag",
       parts: [
         { partId: "PT-SEALANT", qty: 1 },
         { partId: "PT-INSPECTTAG", qty: 1 },
@@ -496,6 +520,7 @@ const SEED_DATA = {
       description: "Verify torque on all launch interface fasteners against spec.",
       targetSeconds: 300,
       order: 1,
+      modelType: "fastener-array",
       parts: [{ partId: "PT-NAS14N", qty: 6 }],
     },
     {
@@ -510,6 +535,7 @@ const SEED_DATA = {
       description: "Confirm umbilical connector fit and line routing clearance.",
       targetSeconds: 420,
       order: 2,
+      modelType: "tube-assembly",
       parts: [
         { partId: "PT-VAPORTUBE", qty: 1 },
         { partId: "PT-FUELLINE", qty: 1 },
@@ -527,6 +553,7 @@ const SEED_DATA = {
       description: "Complete final QA checklist and tag the interface for hand-off.",
       targetSeconds: 240,
       order: 3,
+      modelType: "flat-tag",
       parts: [{ partId: "PT-INSPECTTAG", qty: 1 }],
     },
   ],

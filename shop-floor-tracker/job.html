@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Job — Shop Floor Tracker</title>
   <link rel="stylesheet" href="css/styles.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./js/vendor/three/three.module.min.js",
+        "three/addons/controls/OrbitControls.js": "./js/vendor/three/controls/OrbitControls.js"
+      }
+    }
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -37,6 +45,12 @@
           <span class="detail-category" id="detailCategory"></span>
           <span class="badge badge-segment" id="detailSegment" style="width: fit-content;"></span>
           <p class="detail-description" id="detailDescription"></p>
+        </div>
+
+        <div class="workspace-viewer">
+          <div class="viewer-canvas-wrap" id="viewerCanvasWrap"></div>
+          <button class="viewer-reset-btn" id="viewerResetBtn">Reset View</button>
+          <span class="viewer-filename-label" id="viewerFilenameLabel"></span>
         </div>
 
         <div class="control-bar">
@@ -77,5 +91,6 @@
   <script src="js/storage.js"></script>
   <script src="js/timer.js"></script>
   <script src="js/job.js"></script>
+  <script type="module" src="js/viewer.js"></script>
 </body>
 </html>
