@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<!--
+  Scheduling UI Prototype — office/planner dashboard for realtime shop-floor awareness.
+
+  KNOWN LIMITATIONS (this is an early prototype, not the real build):
+    - Everything is in-memory. Refreshing the page resets all state.
+    - The "floor activity" feed is a simulated/mocked event generator, not real
+      speech-to-text. Voice summaries are represented as pre-written text templates.
+    - No backend, no persistence, no auth.
+
+  Open this file directly in a browser (double-click / file://) — no build step,
+  no server, no external dependencies. Everything is self-contained below.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shop Floor Scheduling — Prototype</title>
+<style>
+  :root{
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2128;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --danger: #f85149;
+    --warning: #d29922;
+    --success: #3fb950;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:13px;
+  }
+  .app{height:100vh;display:flex;flex-direction:column;}
+
+  /* ---------- header ---------- */
+  header.toolbar{
+    display:flex;align-items:center;gap:16px;
+    padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  header.toolbar h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.02em;}
+  header.toolbar .clock{color:var(--muted);font-variant-numeric:tabular-nums;}
+  .spacer{flex:1;}
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:3px 10px;border-radius:999px;font-size:11px;
+    border:1px solid var(--border);color:var(--muted);
+  }
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--success);}
+  .pill.live .dot{animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  button{
+    background:var(--panel-2);color:var(--text);border:1px solid var(--border);
+    border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;
+  }
+  button:hover{border-color:var(--accent);}
+  button:disabled{opacity:.5;cursor:default;}
+  button:disabled:hover{border-color:var(--border);}
+  .count-badge{
+    display:inline-block;min-width:18px;text-align:center;padding:1px 6px;border-radius:999px;
+    background:var(--panel-2);border:1px solid var(--border);color:var(--muted);font-size:11px;
+  }
+
+  /* ---------- board layout ---------- */
+  .board{
+    flex:1;display:grid;grid-template-columns:1fr 340px;gap:12px;
+    padding:12px;overflow:hidden;min-height:0;
+  }
+  .queue-col{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:hidden;}
+  .panel{
+    background:var(--panel);border:1px solid var(--border);border-radius:8px;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .panel-header{
+    display:flex;align-items:center;gap:8px;padding:8px 12px;
+    border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--muted);flex-shrink:0;
+  }
+  .panel-header .title{color:var(--text);font-weight:600;letter-spacing:.02em;}
+  .panel-header .toggle{margin-left:auto;cursor:pointer;user-select:none;color:var(--muted);}
+
+  #queuePanel{flex:1 1 60%;min-height:0;}
+  #blockedPanel{flex:0 0 auto;max-height:38%;}
+  #blockedPanel.collapsed .card-list{display:none;}
+  #blockedPanel.collapsed{max-height:none;}
+
+  .card-list{
+    flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;
+    min-height:48px;
+  }
+  .card-list.empty::after{
+    content:attr(data-empty-label);color:var(--muted);font-size:12px;padding:10px;text-align:center;
+  }
+  .card-list.dragging-over{background:rgba(88,166,255,.08);outline:1px dashed var(--accent);outline-offset:-4px;}
+
+  /* ---------- job card ---------- */
+  .job-card{
+    background:var(--panel-2);border:1px solid var(--border);border-radius:6px;
+    padding:8px 10px;cursor:grab;position:relative;
+  }
+  .job-card.dragging{opacity:.35;}
+  .job-card.flash{animation:flashHi 1.2s ease;}
+  @keyframes flashHi{0%{box-shadow:0 0 0 2px var(--accent);}100%{box-shadow:0 0 0 0 transparent;}}
+  .card-top{display:flex;align-items:center;gap:8px;}
+  .rank-badge{
+    flex-shrink:0;width:26px;height:26px;border-radius:6px;background:#0d1117;
+    border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:12px;
+  }
+  .card-main{flex:1;min-width:0;}
+  .card-title{font-weight:600;font-size:12.5px;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}
+  .card-title .jid{color:var(--accent);font-weight:700;}
+  .card-sub{color:var(--muted);font-size:11px;margin-top:1px;}
+  .rec-diff{font-size:10px;color:var(--warning);margin-left:auto;flex-shrink:0;white-space:nowrap;}
+  .info-btn{
+    flex-shrink:0;width:18px;height:18px;border-radius:50%;border:1px solid var(--border);
+    background:transparent;color:var(--muted);font-size:10px;line-height:1;padding:0;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .info-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+  .urgency-row{display:flex;align-items:center;gap:6px;margin-top:6px;}
+  .urgency-track{flex:1;height:5px;background:#0d1117;border-radius:3px;overflow:hidden;}
+  .urgency-fill{height:100%;border-radius:3px;}
+  .due-label{font-size:10.5px;color:var(--muted);white-space:nowrap;}
+
+  .badge-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+  .badge{
+    font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);
+    display:inline-flex;align-items:center;gap:4px;color:var(--muted);
+  }
+  .badge .dot{width:6px;height:6px;border-radius:50%;}
+  .badge.risk{color:var(--warning);border-color:var(--warning);}
+  .badge.blocked-reason{color:var(--danger);border-color:var(--danger);}
+
+  .breakdown{
+    display:none;margin-top:8px;padding:8px;border-top:1px dashed var(--border);
+    font-size:11px;color:var(--muted);
+  }
+  .breakdown.show{display:block;}
+  .breakdown div{display:flex;justify-content:space-between;padding:1px 0;}
+  .breakdown b{color:var(--text);}
+
+  .blocked-card-actions{margin-top:6px;display:flex;justify-content:flex-end;}
+  .blocked-card-actions button{font-size:11px;padding:4px 8px;}
+
+  /* status dot colors, shared */
+  .status-running,.status-on-shift{background:var(--success);}
+  .status-idle,.status-break{background:var(--warning);}
+  .status-down,.status-out,.status-maintenance,.status-off-shift{background:var(--danger);}
+
+  /* ---------- feed panel ---------- */
+  aside.panel{overflow:hidden;}
+  .feed-list{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;}
+  .feed-entry{
+    background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--muted);
+    border-radius:4px;padding:6px 8px;font-size:11.5px;animation:slideIn .25s ease;
+  }
+  @keyframes slideIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  .feed-entry.cat-material,.feed-entry.cat-delay{border-left-color:var(--danger);}
+  .feed-entry.cat-labor{border-left-color:var(--warning);}
+  .feed-entry.cat-machine{border-left-color:var(--danger);}
+  .feed-entry.cat-speedup{border-left-color:var(--success);}
+  .feed-entry.cat-info{border-left-color:var(--accent);}
+  .feed-meta{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:10px;margin-bottom:3px;}
+  .feed-cat{
+    text-transform:uppercase;letter-spacing:.04em;font-weight:700;font-size:9.5px;
+  }
+  .feed-entry.cat-material .feed-cat,.feed-entry.cat-delay .feed-cat{color:var(--danger);}
+  .feed-entry.cat-labor .feed-cat{color:var(--warning);}
+  .feed-entry.cat-machine .feed-cat{color:var(--danger);}
+  .feed-entry.cat-speedup .feed-cat{color:var(--success);}
+  .feed-entry.cat-info .feed-cat{color:var(--accent);}
+  .job-pill{
+    color:var(--accent);cursor:pointer;text-decoration:underline dotted;font-weight:600;
+  }
+  .feed-actions{margin-top:5px;display:flex;justify-content:flex-end;gap:6px;}
+  .feed-actions button{font-size:10.5px;padding:3px 7px;}
+  .applied-tag{font-size:10px;color:var(--success);}
+
+  /* ---------- footer status strip ---------- */
+  footer.status-strip{
+    flex-shrink:0;display:flex;gap:18px;padding:8px 16px;background:var(--panel);
+    border-top:1px solid var(--border);overflow-x:auto;
+  }
+  .strip-group{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  .strip-group .label{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;margin-right:4px;}
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;
+    border:1px solid var(--border);font-size:11px;background:var(--panel-2);white-space:nowrap;
+  }
+  .chip .dot{width:6px;height:6px;border-radius:50%;}
+
+  /* ---------- modal ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(1,4,9,.6);display:flex;align-items:center;
+    justify-content:center;z-index:50;
+  }
+  .modal-box{
+    background:var(--panel);border:1px solid var(--border);border-radius:8px;
+    padding:16px;width:320px;
+  }
+  .modal-box h3{margin:0 0 4px;font-size:13px;}
+  .modal-box p{margin:0 0 12px;color:var(--muted);font-size:12px;}
+  .modal-options{display:flex;flex-direction:column;gap:6px;}
+  .modal-options button{text-align:left;padding:8px 10px;}
+  .modal-cancel{margin-top:12px;width:100%;}
+
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="toolbar">
+    <h1>Shop Floor Scheduling</h1>
+    <span class="clock" id="clock">--:--:--</span>
+    <span class="spacer"></span>
+    <span class="pill"><span class="dot" style="background:var(--accent)"></span><span id="activeCount">0</span>&nbsp;active</span>
+    <span class="pill"><span class="dot" style="background:var(--danger)"></span><span id="blockedCount">0</span>&nbsp;blocked</span>
+    <span class="pill live"><span class="dot"></span>LIVE SIM</span>
+    <button id="resetBtn" title="Discard manual reordering and re-sort by computed priority">Reset to recommended</button>
+  </header>
+
+  <main class="board">
+    <div class="queue-col">
+      <section class="panel" id="queuePanel">
+        <div class="panel-header">
+          <span class="title">Active Priority Queue</span>
+          <span class="count-badge" id="queueCountBadge">0</span>
+        </div>
+        <div class="card-list" id="queueList" data-empty-label="No active jobs"></div>
+      </section>
+
+      <section class="panel" id="blockedPanel">
+        <div class="panel-header">
+          <span class="title">Blocked / Waiting</span>
+          <span class="count-badge" id="blockedCountBadge">0</span>
+          <span class="toggle" id="blockedToggle">▾ collapse</span>
+        </div>
+        <div class="card-list" id="blockedList" data-empty-label="Drag a job here when it's blocked (material, outside processing, machine down…)"></div>
+      </section>
+    </div>
+
+    <aside class="panel">
+      <div class="panel-header">
+        <span class="title">Floor Activity</span>
+      </div>
+      <div class="feed-list" id="feedList"></div>
+    </aside>
+  </main>
+
+  <footer class="status-strip">
+    <div class="strip-group"><span class="label">Machines</span><span id="machineStrip"></span></div>
+    <div class="strip-group"><span class="label">Employees</span><span id="employeeStrip"></span></div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================
+     DATA GENERATION
+  ========================================================= */
+  const PARTS = [
+    "Bracket Assembly, LH","Bracket Assembly, RH","Drive Shaft Coupling","Housing, Gearbox",
+    "Manifold Block","Spindle Adapter","Flange Plate","Pump Impeller","Valve Body",
+    "Bearing Retainer","Mounting Plate","Shaft Collar","Support Bracket","Cover, Inspection",
+    "Hydraulic Fitting","Sensor Bracket","Gasket Carrier","Idler Pulley","Frame Rail","Clamp Ring"
+  ];
+  const CUSTOMERS = ["Acme Robotics","Northfield Industrial","Vantage Aero","Bluewater Marine","Corsair Dynamics","Meridian Fab"];
+
+  const MACHINES = [
+    {id:"m1", name:"CNC-01", status:"running", downUntil:null},
+    {id:"m2", name:"CNC-02", status:"running", downUntil:null},
+    {id:"m3", name:"CNC-03", status:"idle", downUntil:null},
+    {id:"m4", name:"Mill-01", status:"running", downUntil:null},
+    {id:"m5", name:"Lathe-02", status:"idle", downUntil:null},
+  ];
+  const EMPLOYEES = [
+    {id:"e1", name:"T. Alvarez", status:"on-shift"},
+    {id:"e2", name:"K. Nguyen", status:"on-shift"},
+    {id:"e3", name:"R. Patel", status:"on-shift"},
+    {id:"e4", name:"J. Okafor", status:"break"},
+    {id:"e5", name:"M. Sorensen", status:"on-shift"},
+    {id:"e6", name:"D. Wu", status:"off-shift"},
+  ];
+
+  const machinesById = Object.fromEntries(MACHINES.map(m=>[m.id,m]));
+  const employeesById = Object.fromEntries(EMPLOYEES.map(e=>[e.id,e]));
+
+  function rand(min,max){ return min + Math.random()*(max-min); }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  const JOB_COUNT = 18;
+  const jobs = [];
+  for(let i=0;i<JOB_COUNT;i++){
+    const id = "J-" + (4100 + i*17 + Math.floor(rand(0,9)));
+    const dueInHours = rand(-12, 14*24); // some already overdue, out to ~2 weeks
+    const estRemainingHours = rand(1, 36);
+    const materialRisk = Math.random() < 0.15;
+    jobs.push({
+      id, part: PARTS[i % PARTS.length], customer: pick(CUSTOMERS),
+      qty: Math.floor(rand(4,120)),
+      dueDate: new Date(Date.now() + dueInHours*3600000),
+      estRemainingHours,
+      machine: pick(MACHINES).id,
+      employee: pick(EMPLOYEES).id,
+      status: "queued",
+      materialRisk, materialRiskNote: materialRisk ? "Vendor confirmed tight ETA on raw stock." : null,
+      blocked:false, blockedReason:null, blockedAt:null,
+      computedRank:null, scoreBreakdown:null,
+      history:[]
+    });
+  }
+  const jobsById = Object.fromEntries(jobs.map(j=>[j.id,j]));
+
+  /* =========================================================
+     STATE
+  ========================================================= */
+  const state = {
+    manualOrder: [],   // order of active (non-blocked) queue, source of truth for display
+    blockedOrder: [],
+    openBreakdowns: new Set(),
+    draggedId: null,
+    feed: [],
+  };
+
+  /* =========================================================
+     SCORING
+  ========================================================= */
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function hoursUntil(date){ return (date.getTime() - Date.now()) / 3600000; }
+
+  function computeScore(job){
+    const machine = machinesById[job.machine];
+    const employee = employeesById[job.employee];
+    const dueInHours = hoursUntil(job.dueDate);
+    const slackHours = dueInHours - job.estRemainingHours;
+    const urgencyScore = clamp(100 - (slackHours/240)*100, 0, 100);
+
+    let machinePenalty = 0;
+    if(machine){
+      if(machine.status === "down") machinePenalty = 20;
+      else if(machine.status === "maintenance") machinePenalty = 8;
+    }
+    let laborPenalty = 0;
+    if(employee){
+      if((employee.status === "off-shift" || employee.status === "out") && slackHours < 24) laborPenalty = 15;
+      else if(employee.status === "break") laborPenalty = 5;
+    }
+    const materialPenalty = (job.materialRisk && !job.blocked) ? 25 : 0;
+
+    const finalScore = clamp(urgencyScore + machinePenalty + laborPenalty + materialPenalty, 0, 999);
+    return {
+      daysToDue: dueInHours/24, slackHours, urgencyScore,
+      machinePenalty, laborPenalty, materialPenalty, finalScore
+    };
+  }
+
+  function recomputeAll(){
+    jobs.forEach(j => j.scoreBreakdown = computeScore(j));
+    const active = jobs.filter(j=>!j.blocked)
+      .slice()
+      .sort((a,b)=> b.scoreBreakdown.finalScore - a.scoreBreakdown.finalScore
+                 || a.dueDate - b.dueDate
+                 || a.id.localeCompare(b.id));
+    active.forEach((j,i)=> j.computedRank = i+1);
+    jobs.filter(j=>j.blocked).forEach(j=>{ j.computedRank = active.length + 1; });
+  }
+
+  function urgencyColor(score){
+    if(score >= 70) return "var(--danger)";
+    if(score >= 40) return "var(--warning)";
+    return "var(--success)";
+  }
+  function fmtDue(date){
+    const h = hoursUntil(date);
+    const abs = date.toLocaleDateString(undefined,{month:"short",day:"numeric"});
+    if(h < 0) return `Overdue — was ${abs}`;
+    if(h < 24) return `Due today, ${abs}`;
+    return `Due ${abs} (${Math.round(h/24)}d)`;
+  }
+
+  /* =========================================================
+     RENDERING
+  ========================================================= */
+  const queueListEl = document.getElementById("queueList");
+  const blockedListEl = document.getElementById("blockedList");
+  const feedListEl = document.getElementById("feedList");
+
+  function cardInnerHTML(job, displayRank){
+    const sb = job.scoreBreakdown;
+    const color = urgencyColor(sb.finalScore);
+    const machine = machinesById[job.machine];
+    const employee = employeesById[job.employee];
+    const recDiff = (!job.blocked && displayRank !== job.computedRank)
+      ? `<span class="rec-diff">recommended #${job.computedRank}</span>` : "";
+
+    let badges = `
+      <span class="badge"><span class="dot status-${machine.status}"></span>${machine.name}</span>
+      <span class="badge"><span class="dot status-${employee.status.replace(" ","-")}"></span>${employee.name}</span>
+    `;
+    if(job.materialRisk && !job.blocked){
+      badges += `<span class="badge risk">⚠ material risk</span>`;
+    }
+    if(job.blocked){
+      badges += `<span class="badge blocked-reason">${job.blockedReason}</span>`;
+    }
+
+    const blockedActions = job.blocked
+      ? `<div class="blocked-card-actions"><button data-action="unblock" data-job="${job.id}">Return to queue</button></div>`
+      : "";
+
+    return `
+      <div class="card-top">
+        <div class="rank-badge">${displayRank}</div>
+        <div class="card-main">
+          <div class="card-title"><span class="jid">${job.id}</span>${job.part}${recDiff}</div>
+          <div class="card-sub">${job.customer} · qty ${job.qty}</div>
+        </div>
+        <button class="info-btn" data-action="toggle-info" data-job="${job.id}" title="Show score breakdown">i</button>
+      </div>
+      <div class="urgency-row">
+        <div class="urgency-track"><div class="urgency-fill" style="width:${sb.finalScore}%;background:${color}"></div></div>
+        <div class="due-label">${fmtDue(job.dueDate)}</div>
+      </div>
+      <div class="badge-row">${badges}</div>
+      ${blockedActions}
+      <div class="breakdown${state.openBreakdowns.has(job.id) ? " show":""}">
+        <div><span>Days to due</span><b>${sb.daysToDue.toFixed(1)}</b></div>
+        <div><span>Slack hours</span><b>${sb.slackHours.toFixed(1)}</b></div>
+        <div><span>Urgency score</span><b>${sb.urgencyScore.toFixed(0)}</b></div>
+        <div><span>Machine penalty</span><b>+${sb.machinePenalty}</b></div>
+        <div><span>Labor penalty</span><b>+${sb.laborPenalty}</b></div>
+        <div><span>Material penalty</span><b>+${sb.materialPenalty}</b></div>
+        <div><span>Final score</span><b>${sb.finalScore.toFixed(0)}</b></div>
+      </div>
+    `;
+  }
+
+  function makeCardEl(job, displayRank){
+    const el = document.createElement("div");
+    el.className = "job-card";
+    el.draggable = true;
+    el.dataset.jobId = job.id;
+    el.innerHTML = cardInnerHTML(job, displayRank);
+    el.addEventListener("dragstart", onCardDragStart);
+    el.addEventListener("dragend", onCardDragEnd);
+    return el;
+  }
+
+  function renderQueue(){
+    queueListEl.innerHTML = "";
+    state.manualOrder.forEach((id, idx) => {
+      const job = jobsById[id];
+      if(!job || job.blocked) return;
+      queueListEl.appendChild(makeCardEl(job, idx+1));
+    });
+    queueListEl.classList.toggle("empty", state.manualOrder.length === 0);
+    document.getElementById("queueCountBadge").textContent = state.manualOrder.length;
+    document.getElementById("activeCount").textContent = state.manualOrder.length;
+  }
+
+  function renderBlocked(){
+    blockedListEl.innerHTML = "";
+    state.blockedOrder.forEach((id, idx) => {
+      const job = jobsById[id];
+      if(!job || !job.blocked) return;
+      blockedListEl.appendChild(makeCardEl(job, idx+1));
+    });
+    blockedListEl.classList.toggle("empty", state.blockedOrder.length === 0);
+    document.getElementById("blockedCountBadge").textContent = state.blockedOrder.length;
+    document.getElementById("blockedCount").textContent = state.blockedOrder.length;
+  }
+
+  function renderStrips(){
+    const machineStrip = document.getElementById("machineStrip");
+    machineStrip.innerHTML = MACHINES.map(m =>
+      `<span class="chip"><span class="dot status-${m.status}"></span>${m.name} — ${m.status}</span>`
+    ).join(" ");
+    const employeeStrip = document.getElementById("employeeStrip");
+    employeeStrip.innerHTML = EMPLOYEES.map(e =>
+      `<span class="chip"><span class="dot status-${e.status.replace(" ","-")}"></span>${e.name} — ${e.status}</span>`
+    ).join(" ");
+  }
+
+  function sortManualOrderByRecommended(){
+    state.manualOrder = jobs.filter(j=>!j.blocked)
+      .slice()
+      .sort((a,b)=> a.computedRank - b.computedRank)
+      .map(j=>j.id);
+  }
+
+  function renderAll(){
+    recomputeAll();
+    sortManualOrderByRecommended();
+    renderQueue();
+    renderBlocked();
+    renderStrips();
+  }
+
+  /* =========================================================
+     DRAG AND DROP (native HTML5 DnD, no external libraries)
+  ========================================================= */
+  function onCardDragStart(e){
+    state.draggedId = e.currentTarget.dataset.jobId;
+    e.currentTarget.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", state.draggedId);
+  }
+  function onCardDragEnd(e){
+    e.currentTarget.classList.remove("dragging");
+  }
+
+  function getDragAfterElement(container, y){
+    const els = [...container.querySelectorAll(".job-card:not(.dragging)")];
+    return els.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height/2;
+      if(offset < 0 && offset > closest.offset){
+        return {offset, element: child};
+      }
+      return closest;
+    }, {offset:-Infinity, element:null}).element;
+  }
+
+  function wireDropZone(container, onDrop){
+    container.addEventListener("dragover", e => {
+      e.preventDefault();
+      const dragging = document.querySelector(".job-card.dragging");
+      if(!dragging) return;
+      container.classList.add("dragging-over");
+      const after = getDragAfterElement(container, e.clientY);
+      if(after == null) container.appendChild(dragging);
+      else container.insertBefore(dragging, after);
+    });
+    container.addEventListener("dragleave", e => {
+      if(e.target === container) container.classList.remove("dragging-over");
+    });
+    container.addEventListener("drop", e => {
+      e.preventDefault();
+      container.classList.remove("dragging-over");
+      onDrop();
+    });
+  }
+
+  function syncManualOrderFromDOM(){
+    state.manualOrder = [...queueListEl.querySelectorAll(".job-card")].map(el => el.dataset.jobId);
+  }
+  function syncBlockedOrderFromDOM(){
+    state.blockedOrder = [...blockedListEl.querySelectorAll(".job-card")].map(el => el.dataset.jobId);
+  }
+
+  wireDropZone(queueListEl, () => {
+    const job = jobsById[state.draggedId];
+    if(!job) return;
+    if(job.blocked){
+      job.blocked = false; job.blockedReason = null; job.blockedAt = null;
+      job.history.push({ts:new Date(), actor:"planner", note:"Returned to active queue"});
+    }
+    syncManualOrderFromDOM();
+    syncBlockedOrderFromDOM();
+    recomputeAll();
+    renderQueue();
+    renderBlocked();
+    renderStrips();
+  });
+
+  wireDropZone(blockedListEl, () => {
+    const job = jobsById[state.draggedId];
+    if(!job) return;
+    if(job.blocked){
+      syncBlockedOrderFromDOM();
+      return;
+    }
+    openBlockReasonModal(job, (reason) => {
+      blockJob(job, reason, "Manually blocked by planner");
+      syncManualOrderFromDOM();
+      syncBlockedOrderFromDOM();
+      recomputeAll();
+      renderQueue();
+      renderBlocked();
+      renderStrips();
+    }, () => {
+      // cancelled: snap back to model (job stays active, in its old spot)
+      renderQueue();
+      renderBlocked();
+    });
+  });
+
+  function blockJob(job, reason, note){
+    job.blocked = true;
+    job.blockedReason = reason;
+    job.blockedAt = new Date();
+    job.history.push({ts:new Date(), actor:"planner", note: note || `Blocked: ${reason}`});
+    const idx = state.manualOrder.indexOf(job.id);
+    if(idx !== -1) state.manualOrder.splice(idx,1);
+    if(!state.blockedOrder.includes(job.id)) state.blockedOrder.push(job.id);
+  }
+
+  function reinsertActive(job){
+    computeScore(job); // ensure fresh-ish before comparison (recomputeAll runs right after anyway)
+    job.scoreBreakdown = computeScore(job);
+    let idx = state.manualOrder.findIndex(id => jobsById[id].scoreBreakdown.finalScore <= job.scoreBreakdown.finalScore);
+    if(idx === -1) idx = state.manualOrder.length;
+    state.manualOrder.splice(idx, 0, job.id);
+  }
+
+  /* click delegation: info toggle + return-to-queue button */
+  document.getElementById("queuePanel").addEventListener("click", handleCardClick);
+  document.getElementById("blockedPanel").addEventListener("click", handleCardClick);
+  function handleCardClick(e){
+    const infoBtn = e.target.closest("[data-action='toggle-info']");
+    if(infoBtn){
+      const id = infoBtn.dataset.job;
+      if(state.openBreakdowns.has(id)) state.openBreakdowns.delete(id);
+      else state.openBreakdowns.add(id);
+      const card = infoBtn.closest(".job-card");
+      card.querySelector(".breakdown").classList.toggle("show");
+      return;
+    }
+    const unblockBtn = e.target.closest("[data-action='unblock']");
+    if(unblockBtn){
+      const job = jobsById[unblockBtn.dataset.job];
+      const bIdx = state.blockedOrder.indexOf(job.id);
+      if(bIdx !== -1) state.blockedOrder.splice(bIdx,1);
+      job.blocked = false; job.blockedReason = null; job.blockedAt = null;
+      job.history.push({ts:new Date(), actor:"planner", note:"Returned to active queue"});
+      recomputeAll();
+      reinsertActive(job);
+      renderQueue();
+      renderBlocked();
+      renderStrips();
+    }
+  }
+
+  /* =========================================================
+     BLOCK-REASON MODAL
+  ========================================================= */
+  const REASONS = [
+    {key:"material", label:"Material — waiting on stock/vendor"},
+    {key:"outside-processing", label:"Outside processing — sent out"},
+    {key:"machine-down", label:"Machine down / unavailable"},
+    {key:"other", label:"Other"},
+  ];
+  function openBlockReasonModal(job, onConfirm, onCancel){
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <h3>Move ${job.id} to Blocked</h3>
+        <p>Why is this job being held?</p>
+        <div class="modal-options">
+          ${REASONS.map(r => `<button data-reason="${r.key}">${r.label}</button>`).join("")}
+        </div>
+        <button class="modal-cancel">Cancel</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", e => {
+      const reasonBtn = e.target.closest("[data-reason]");
+      if(reasonBtn){
+        document.body.removeChild(overlay);
+        onConfirm(reasonBtn.dataset.reason);
+        return;
+      }
+      if(e.target.classList.contains("modal-cancel") || e.target === overlay){
+        document.body.removeChild(overlay);
+        onCancel();
+      }
+    });
+  }
+
+  /* =========================================================
+     RESET TO RECOMMENDED
+  ========================================================= */
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    recomputeAll();
+    sortManualOrderByRecommended();
+    renderQueue();
+  });
+
+  /* =========================================================
+     BLOCKED PANEL COLLAPSE
+  ========================================================= */
+  document.getElementById("blockedToggle").addEventListener("click", () => {
+    const panel = document.getElementById("blockedPanel");
+    const collapsed = panel.classList.toggle("collapsed");
+    document.getElementById("blockedToggle").textContent = collapsed ? "▸ expand" : "▾ collapse";
+  });
+
+  /* =========================================================
+     FLOOR ACTIVITY FEED (simulated realtime engine)
+  ========================================================= */
+  const MAX_FEED_ENTRIES = 200;
+  let feedSeq = 0;
+
+  function activeJobPool(){ return jobs.filter(j => !j.blocked); }
+
+  const EVENT_BUILDERS = [
+    {
+      category: "material",
+      build(){
+        const pool = activeJobPool();
+        if(!pool.length) return null;
+        const job = pick(pool);
+        const days = Math.floor(rand(1,4));
+        return {
+          jobId: job.id,
+          text: `Voice note from receiving: material delay reported for <b>${job.part}</b> (${job.id}) — vendor ETA slipped ${days} day${days>1?"s":""}.`,
+          suggestion: {label:"Move to Blocked", applied:false, apply(){
+            blockJob(job, "material", "Material delay reported via floor update");
+            const idx = state.manualOrder.indexOf(job.id);
+            if(idx !== -1) state.manualOrder.splice(idx,1);
+          }}
+        };
+      }
+    },
+    {
+      category: "labor",
+      build(){
+        const pool = activeJobPool();
+        if(!pool.length) return null;
+        const job = pick(pool);
+        const employee = employeesById[job.employee];
+        return {
+          jobId: job.id,
+          text: `${employee.name} called out sick — coverage needed for ${job.id}.`,
+          autoApply(){ employee.status = "out"; }
+        };
+      }
+    },
+    {
+      category: "speedup",
+      build(){
+        const pool = activeJobPool();
+        if(!pool.length) return null;
+        const job = pick(pool);
+        return {
+          jobId: job.id,
+          text: `Operator finished setup early on ${job.id} — remaining time trimmed.`,
+          autoApply(){ job.estRemainingHours = Math.max(0.5, job.estRemainingHours * 0.75); }
+        };
+      }
+    },
+    {
+      category: "machine",
+      build(){
+        const machine = pick(MACHINES);
+        return {
+          jobId: null,
+          text: `${machine.name} flagged down for unplanned maintenance.`,
+          autoApply(){ machine.status = "down"; machine.downUntil = new Date(Date.now()+2*3600000); }
+        };
+      }
+    },
+    {
+      category: "info",
+      build(){
+        const pool = jobs.filter(j=>!j.blocked);
+        if(!pool.length) return null;
+        const job = pick(pool);
+        return { jobId: job.id, text: `QA sign-off complete on ${job.id}.` };
+      }
+    },
+  ];
+
+  function generateFloorEvent(){
+    const builder = pick(EVENT_BUILDERS);
+    const payload = builder.build();
+    if(!payload) return;
+
+    if(payload.autoApply) payload.autoApply();
+
+    const entry = {
+      id: "ev" + (++feedSeq),
+      ts: new Date(),
+      category: builder.category,
+      jobId: payload.jobId,
+      text: payload.text,
+      suggestion: payload.suggestion || null,
+    };
+    state.feed.push(entry);
+    if(state.feed.length > MAX_FEED_ENTRIES) state.feed.shift();
+    appendFeedEntry(entry);
+
+    if(payload.autoApply){
+      recomputeAll();
+      renderQueue();
+      renderStrips();
+    }
+  }
+
+  function appendFeedEntry(entry){
+    const el = document.createElement("div");
+    el.className = `feed-entry cat-${entry.category}`;
+    el.dataset.entryId = entry.id;
+    const time = entry.ts.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    const jobPill = entry.jobId ? `<span class="job-pill" data-goto="${entry.jobId}">${entry.jobId}</span>` : "";
+    let actions = "";
+    if(entry.suggestion){
+      actions = `<div class="feed-actions" data-entry="${entry.id}">
+        <button data-apply="${entry.id}">${entry.suggestion.label}</button>
+      </div>`;
+    }
+    el.innerHTML = `
+      <div class="feed-meta"><span class="feed-cat">${entry.category}</span><span>${time}</span>${jobPill}</div>
+      <div>${entry.text}</div>
+      ${actions}
+    `;
+    feedListEl.appendChild(el);
+    while(feedListEl.children.length > MAX_FEED_ENTRIES) feedListEl.removeChild(feedListEl.firstChild);
+    feedListEl.scrollTop = feedListEl.scrollHeight;
+  }
+
+  feedListEl.addEventListener("click", e => {
+    const gotoEl = e.target.closest("[data-goto]");
+    if(gotoEl){ highlightJob(gotoEl.dataset.goto); return; }
+    const applyBtn = e.target.closest("[data-apply]");
+    if(applyBtn){
+      const entry = state.feed.find(f => f.id === applyBtn.dataset.apply);
+      if(!entry || !entry.suggestion || entry.suggestion.applied) return;
+      entry.suggestion.applied = true;
+      entry.suggestion.apply();
+      recomputeAll();
+      renderQueue();
+      renderBlocked();
+      renderStrips();
+      const actionsEl = applyBtn.closest(".feed-actions");
+      actionsEl.innerHTML = `<span class="applied-tag">✓ applied</span>`;
+    }
+  });
+
+  function highlightJob(jobId){
+    const card = document.querySelector(`.job-card[data-job-id="${jobId}"]`);
+    if(!card) return;
+    card.scrollIntoView({behavior:"smooth", block:"center"});
+    card.classList.remove("flash");
+    void card.offsetWidth; // restart animation
+    card.classList.add("flash");
+  }
+
+  /* =========================================================
+     TIMERS: clock, periodic recompute, jittered event stream
+  ========================================================= */
+  function tickClock(){
+    document.getElementById("clock").textContent = new Date().toLocaleTimeString();
+  }
+  setInterval(tickClock, 1000);
+  tickClock();
+
+  // Periodic recompute: updates scores/urgency/badges without touching manualOrder,
+  // so a planner's manual reordering survives (only numbers/colors refresh).
+  setInterval(() => {
+    recomputeAll();
+    renderQueue();
+    renderBlocked();
+    renderStrips();
+  }, 30000);
+
+  function scheduleNextEvent(){
+    const delay = rand(4000, 9000);
+    setTimeout(() => {
+      generateFloorEvent();
+      scheduleNextEvent();
+    }, delay);
+  }
+  scheduleNextEvent();
+
+  /* =========================================================
+     INIT
+  ========================================================= */
+  renderAll();
+})();
+</script>
+</body>
+</html>
