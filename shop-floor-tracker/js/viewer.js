@@ -1,10 +1,15 @@
-// 3D part preview viewer (ES module). Renders a placeholder shape per
-// operation, keyed by `modelType`, in place of real STEP-file geometry.
-// Owns a single Three.js scene/camera/renderer/controls instance;
-// showModel() swaps only the displayed mesh group, never recreates them.
+// 3D part preview viewer (classic script, not an ES module — avoids Safari's
+// restriction on dynamic module/Blob-URL loading from file:// pages). Renders
+// a placeholder shape per operation, keyed by `modelType`, in place of real
+// STEP-file geometry. Owns a single Three.js scene/camera/renderer/controls
+// instance; showModel() swaps only the displayed mesh group, never recreates
+// them. Expects js/vendor/three/three.global.js and
+// js/vendor/three/controls/OrbitControls.global.js to have already run,
+// populating window.THREE and window.OrbitControls.
 
-import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+(function () {
+const THREE = window.THREE;
+const OrbitControls = window.OrbitControls;
 
 const COLOR_BASE = 0x8b94a3; // --text-dim
 const COLOR_ACCENT = 0x3ba7f2; // --accent
@@ -272,3 +277,4 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
+})();

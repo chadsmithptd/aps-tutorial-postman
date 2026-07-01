@@ -68,13 +68,20 @@ default camera angle. The timer/control-bar stays scoped to the middle column's
 width (not the full screen) and is pinned to the bottom of that column via flexbox
 — the viewer above it absorbs the remaining vertical space.
 
-**Three.js is vendored locally, not loaded from a CDN** — `js/vendor/three/`
-contains the minified library and its OrbitControls addon (MIT licensed), so
-`job.html` keeps working fully offline via a local import map. `standalone.html`
-takes this further: the library source is embedded directly in the file (as
-non-executing `<script type="text/plain">` blocks) and loaded via `Blob` URLs
-at runtime, so the single downloadable file has zero external dependencies —
-it's larger as a result (~740 KB) but opens and runs with no network access at all.
+**Three.js is vendored locally, not loaded from a CDN, and loaded as plain classic
+scripts rather than ES modules.** `js/vendor/three/three.global.js` and
+`js/vendor/three/controls/OrbitControls.global.js` are transformed builds that
+assign to `window.THREE`/`window.OrbitControls` instead of using `import`/`export`.
+This is deliberate: ES modules (via import maps or dynamic `import()` of Blob URLs)
+are unreliable when a page is opened directly via `file://` — Safari in particular
+blocks module/Blob-URL loading from `file://` pages outright ("`'file:' URLs are
+treated as unique security origins`"), which left the 3D viewer silently blank.
+Classic `<script>` tags don't have this problem in any browser. `job.html` loads
+the two vendor files plus `js/viewer.js` as ordinary scripts; `standalone.html`
+embeds all three inline as classic scripts, so the single downloadable file has
+zero external dependencies and works the same way in every browser — it's larger
+as a result (~740 KB) but opens and runs with no network access at all, even via
+a direct double-click.
 
 ## Data
 

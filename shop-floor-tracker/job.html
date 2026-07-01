@@ -5,14 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Job — Shop Floor Tracker</title>
   <link rel="stylesheet" href="css/styles.css" />
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "./js/vendor/three/three.module.min.js",
-        "three/addons/controls/OrbitControls.js": "./js/vendor/three/controls/OrbitControls.js"
-      }
-    }
-  </script>
 </head>
 <body>
   <header class="topbar">
@@ -91,6 +83,8 @@
   <script src="js/storage.js"></script>
   <script src="js/timer.js"></script>
   <script src="js/job.js"></script>
-  <script type="module" src="js/viewer.js"></script>
+  <script src="js/vendor/three/three.global.js"></script>
+  <script src="js/vendor/three/controls/OrbitControls.global.js"></script>
+  <script src="js/viewer.js"></script>
 </body>
 </html>
