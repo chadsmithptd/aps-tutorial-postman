@@ -79,12 +79,31 @@
   }
   .tab-btn.active{background:var(--panel);color:var(--text);border-color:var(--border);}
   .hidden{display:none !important;}
+  #focusPillBar{display:flex;gap:6px;align-items:center;margin-left:12px;}
+  .focus-pill{
+    display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
+    font-size:11px;border:1px solid var(--accent);color:var(--accent);background:rgba(88,166,255,.10);
+  }
+  .focus-pill button{
+    background:transparent;border:none;color:var(--accent);font-size:13px;line-height:1;
+    padding:0;cursor:pointer;
+  }
 
   /* ---------- board layout ---------- */
   .board{
-    flex:1;display:grid;grid-template-columns:1fr 340px;gap:12px;
+    flex:1;display:grid;grid-template-columns:220px 1fr 340px;gap:12px;
     padding:12px;overflow:hidden;min-height:0;
   }
+  .dimmed{opacity:.3;}
+  .po-row{
+    background:var(--panel-2);border:1px solid var(--border);border-radius:6px;
+    padding:6px 10px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px;
+  }
+  .po-row:hover{border-color:var(--accent);}
+  .po-row.focused{border-color:var(--accent);background:rgba(88,166,255,.10);}
+  .po-row .po-id{font-weight:700;color:var(--accent);}
+  .po-row .po-customer{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .po-row .po-jobcount{color:var(--muted);font-size:11px;flex-shrink:0;}
   .queue-col{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:hidden;}
   .panel{
     background:var(--panel);border:1px solid var(--border);border-radius:8px;
@@ -141,8 +160,6 @@
   .info-btn:hover{border-color:var(--accent);color:var(--accent);}
 
   .urgency-row{display:flex;align-items:center;gap:6px;margin-top:6px;}
-  .urgency-track{flex:1;height:5px;background:#0d1117;border-radius:3px;overflow:hidden;}
-  .urgency-fill{height:100%;border-radius:3px;}
   .due-label{font-size:10.5px;color:var(--muted);white-space:nowrap;}
 
   .badge-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
@@ -311,9 +328,18 @@
   <nav class="tabbar">
     <button class="tab-btn active" data-tab="priority">Priority Queue</button>
     <button class="tab-btn" data-tab="routing">Routing / Operations</button>
+    <span id="focusPillBar"></span>
   </nav>
 
   <main class="board" id="priorityView">
+    <section class="panel" id="poPanel">
+      <div class="panel-header">
+        <span class="title">Purchase Orders</span>
+        <span class="count-badge" id="poCountBadge">0</span>
+      </div>
+      <div class="card-list" id="poList" data-empty-label="No purchase orders"></div>
+    </section>
+
     <div class="queue-col">
       <section class="panel" id="queuePanel">
         <div class="panel-header">
@@ -475,27 +501,57 @@
   }
 
   const JOB_COUNT = 90;
-  const jobs = [];
-  for(let i=0;i<JOB_COUNT;i++){
-    const id = "J-" + (4100 + i*7);
-    const routing = buildRouting(id, pickRoutingLength());
-    seedProgressState(routing);
-    const totalRemainingHours = routing.filter(s=>s.status!=="done").reduce((sum,s)=>sum+s.durationHours,0);
-    const dueDate = new Date(Date.now() + totalRemainingHours*rand(0.5,1.6)*3600000 + rand(-24,24)*3600000);
-    const materialRisk = Math.random() < 0.12;
-    jobs.push({
-      id, part: PARTS[i % PARTS.length], customer: pick(CUSTOMERS),
-      qty: Math.floor(rand(4,120)),
-      dueDate, routing,
-      materialRisk, materialRiskNote: materialRisk ? "Vendor confirmed tight ETA on raw stock." : null,
-      blocked:false, blockedReason:null, blockedAt:null,
-      computedRank:null, scoreBreakdown:null,
-      currentOp:null, percentComplete:0, atRiskFlag:"on-track", projectedFinish:null,
-      estRemainingHours: totalRemainingHours,
-      history:[]
-    });
+
+  // Purchase orders are generated first (each with its own customer); jobs are
+  // grouped under a PO and inherit its customer, rather than each job picking
+  // one independently. Sizes skew small (most POs are 1-3 line items).
+  function pickJobsPerPo(){
+    const r = Math.random();
+    if(r < 0.35) return 1;
+    if(r < 0.65) return 2;
+    if(r < 0.85) return 3;
+    if(r < 0.95) return 4;
+    return Math.floor(rand(5,7)); // 5 or 6
   }
+  const poSizes = [];
+  {
+    let remaining = JOB_COUNT;
+    while(remaining > 0){
+      const n = Math.min(pickJobsPerPo(), remaining);
+      poSizes.push(n);
+      remaining -= n;
+    }
+  }
+  const purchaseOrders = poSizes.map((n,i) => ({ id: "PO-" + (1001+i), customer: pick(CUSTOMERS), jobIds: [] }));
+
+  const jobs = [];
+  let jobSeq = 0;
+  purchaseOrders.forEach((po,poIdx)=>{
+    for(let k=0;k<poSizes[poIdx];k++){
+      const id = "J-" + (4100 + jobSeq*7);
+      jobSeq++;
+      const routing = buildRouting(id, pickRoutingLength());
+      seedProgressState(routing);
+      const totalRemainingHours = routing.filter(s=>s.status!=="done").reduce((sum,s)=>sum+s.durationHours,0);
+      const dueDate = new Date(Date.now() + totalRemainingHours*rand(0.5,1.6)*3600000 + rand(-24,24)*3600000);
+      const materialRisk = Math.random() < 0.12;
+      const job = {
+        id, part: PARTS[jobSeq % PARTS.length], customer: po.customer, poId: po.id,
+        qty: Math.floor(rand(4,120)),
+        dueDate, routing,
+        materialRisk, materialRiskNote: materialRisk ? "Vendor confirmed tight ETA on raw stock." : null,
+        blocked:false, blockedReason:null, blockedAt:null,
+        computedRank:null, scoreBreakdown:null,
+        currentOp:null, percentComplete:0, atRiskFlag:"on-track", projectedFinish:null,
+        estRemainingHours: totalRemainingHours,
+        history:[]
+      };
+      jobs.push(job);
+      po.jobIds.push(id);
+    }
+  });
   const jobsById = Object.fromEntries(jobs.map(j=>[j.id,j]));
+  const posById = Object.fromEntries(purchaseOrders.map(po=>[po.id,po]));
   const opsById = {};
   jobs.forEach(job => job.routing.forEach(op => { opsById[op.id] = op; }));
 
@@ -510,6 +566,8 @@
     draggedId: null,
     feed: [],
     activeTab: "priority",
+    focusedJobId: null,  // set by clicking a queue/blocked card body -> dims Routing tab
+    focusedPoId: null,   // set by clicking a PO row -> dims Priority Queue job cards
   };
 
   /* =========================================================
@@ -631,11 +689,6 @@
     jobs.filter(j=>j.blocked).forEach(j=>{ j.computedRank = active.length + 1; });
   }
 
-  function urgencyColor(score){
-    if(score >= 70) return "var(--danger)";
-    if(score >= 40) return "var(--warning)";
-    return "var(--success)";
-  }
   function fmtDue(date){
     const h = hoursUntil(date);
     const abs = date.toLocaleDateString(undefined,{month:"short",day:"numeric"});
@@ -657,7 +710,6 @@
 
   function cardInnerHTML(job, displayRank){
     const sb = job.scoreBreakdown;
-    const color = urgencyColor(sb.finalScore);
     const op = job.currentOp;
     const machine = op ? machinesById[op.workCenter] : null;
     const employee = (op && op.employee) ? employeesById[op.employee] : null;
@@ -668,12 +720,7 @@
     if(machine) badges += `<span class="badge"><span class="dot status-${machine.status}"></span>${machine.name}</span>`;
     if(employee) badges += `<span class="badge"><span class="dot status-${employee.status}"></span>${employee.name}</span>`;
     if(op) badges += `<span class="badge">Op ${op.seq}/${job.routing.length} · ${op.opType}</span>`;
-    if(job.materialRisk && !job.blocked) badges += `<span class="badge risk">⚠ material risk</span>`;
     if(job.blocked) badges += `<span class="badge blocked-reason">${job.blockedReason}</span>`;
-
-    let riskLabel = "";
-    if(job.atRiskFlag === "late") riskLabel = `<span class="badge late">⚠ behind pace</span>`;
-    else if(job.atRiskFlag === "at-risk") riskLabel = `<span class="badge risk">⚠ at risk</span>`;
 
     const blockedActions = job.blocked
       ? `<div class="blocked-card-actions"><button data-action="unblock" data-job="${job.id}">Return to queue</button></div>`
@@ -689,10 +736,9 @@
         <button class="info-btn" data-action="toggle-info" data-job="${job.id}" title="Show score breakdown">i</button>
       </div>
       <div class="urgency-row">
-        <div class="urgency-track"><div class="urgency-fill" style="width:${sb.finalScore}%;background:${color}"></div></div>
         <div class="due-label">${fmtDue(job.dueDate)}</div>
       </div>
-      <div class="badge-row">${badges}${riskLabel}</div>
+      <div class="badge-row">${badges}</div>
       ${blockedActions}
       <div class="breakdown${state.openBreakdowns.has(job.id) ? " show":""}">
         <div><span>Days to due</span><b>${sb.daysToDue.toFixed(1)}</b></div>
@@ -716,6 +762,7 @@
     el.dataset.dragId = job.id;
     el.dataset.jobId = job.id;
     el.innerHTML = cardInnerHTML(job, displayRank);
+    el.classList.toggle("dimmed", !!state.focusedPoId && job.poId !== state.focusedPoId);
     el.addEventListener("dragstart", onCardDragStart);
     el.addEventListener("dragend", onCardDragEnd);
     return el;
@@ -762,6 +809,62 @@
       .sort((a,b)=> a.computedRank - b.computedRank)
       .map(j=>j.id);
   }
+
+  function renderPoList(){
+    const poListEl = document.getElementById("poList");
+    poListEl.innerHTML = "";
+    purchaseOrders.forEach(po => {
+      const el = document.createElement("div");
+      el.className = "po-row" + (state.focusedPoId === po.id ? " focused" : "");
+      el.dataset.poId = po.id;
+      el.innerHTML = `<span class="po-id">${po.id}</span><span class="po-customer">${po.customer}</span><span class="po-jobcount">${po.jobIds.length} job${po.jobIds.length!==1?"s":""}</span>`;
+      poListEl.appendChild(el);
+    });
+    document.getElementById("poCountBadge").textContent = purchaseOrders.length;
+  }
+
+  /* =========================================================
+     FOCUS / DIM: clicking a job card jumps to the Routing tab and dims
+     everything not belonging to that job; clicking a PO dims every job
+     card not belonging to that PO. Both are plain state fields, so they
+     survive re-renders/tab switches the same way state.openBreakdowns does.
+  ========================================================= */
+  function renderFocusPills(){
+    let html = "";
+    if(state.focusedJobId){
+      html += `<span class="focus-pill">Focused: ${state.focusedJobId}<button data-clear-focus="job">×</button></span>`;
+    }
+    if(state.focusedPoId){
+      html += `<span class="focus-pill">Focused: ${state.focusedPoId}<button data-clear-focus="po">×</button></span>`;
+    }
+    document.getElementById("focusPillBar").innerHTML = html;
+  }
+
+  function setJobFocus(jobId){
+    state.focusedJobId = (state.focusedJobId === jobId) ? null : jobId;
+    renderFocusPills();
+    renderResourceBoard();
+  }
+
+  function setPoFocus(poId){
+    state.focusedPoId = (state.focusedPoId === poId) ? null : poId;
+    renderFocusPills();
+    renderQueue();
+    renderBlocked();
+    renderPoList();
+  }
+
+  document.getElementById("poList").addEventListener("click", e => {
+    const row = e.target.closest(".po-row");
+    if(row) setPoFocus(row.dataset.poId);
+  });
+
+  document.getElementById("focusPillBar").addEventListener("click", e => {
+    const btn = e.target.closest("[data-clear-focus]");
+    if(!btn) return;
+    if(btn.dataset.clearFocus === "job") setJobFocus(state.focusedJobId);
+    else setPoFocus(state.focusedPoId);
+  });
 
   /* =========================================================
      RENDERING — Routing / Operations tab
@@ -885,6 +988,7 @@
     el.dataset.opId = op.id;
     el.dataset.jobId = op.jobId;
     el.innerHTML = opRowInnerHTML(op, displayIdx, recommendedRank);
+    el.classList.toggle("dimmed", !!state.focusedJobId && op.jobId !== state.focusedJobId);
     if(!op.pinned){
       el.draggable = true;
       el.addEventListener("dragstart", onCardDragStart);
@@ -911,7 +1015,7 @@
       const runningRowEl = document.getElementById(`running-${m.id}`);
       if(runningRowEl){
         runningRowEl.innerHTML = runningJobs.length
-          ? runningJobs.map(j=>`<span class="chip"><span class="dot status-running"></span>${j.id} · Op ${j.currentOp.seq}</span>`).join("")
+          ? runningJobs.map(j=>`<span class="chip${(state.focusedJobId && j.id!==state.focusedJobId) ? " dimmed":""}"><span class="dot status-running"></span>${j.id} · Op ${j.currentOp.seq}</span>`).join("")
           : `<span class="running-empty">Idle</span>`;
       }
       const listEl = document.getElementById(`opList-${m.id}`);
@@ -938,7 +1042,7 @@
       const pendingListEl = document.getElementById(`pendingList-${m.id}`);
       if(pendingListEl){
         pendingListEl.innerHTML = waitingItems.length ? waitingItems.map(({job,nextOp}) => `
-          <div class="pending-row">
+          <div class="pending-row${(state.focusedJobId && job.id!==state.focusedJobId) ? " dimmed":""}">
             <div class="pending-title"><span class="jid" data-action="open-routing" data-job="${job.id}">${job.id}</span> ${nextOp.opType} · Op ${nextOp.seq}/${job.routing.length}</div>
             <div class="pending-sub">Waiting on Op ${job.currentOp.seq} (${job.currentOp.opType}, ${machinesById[job.currentOp.workCenter]?.name || job.currentOp.workCenter}) — ${job.currentOp.status}</div>
           </div>
@@ -957,6 +1061,8 @@
     renderBlocked();
     renderStrips();
     renderResourceBoard();
+    renderPoList();
+    renderFocusPills();
   }
 
   /* =========================================================
@@ -1138,6 +1244,15 @@
       renderBlocked();
       renderStrips();
       renderResourceBoard();
+      return;
+    }
+
+    if(e.target.closest(".jid")) return; // let the document-level open-routing handler take it
+
+    const card = e.target.closest(".job-card");
+    if(card){
+      setJobFocus(card.dataset.jobId);
+      showTab("routing");
     }
   }
 
