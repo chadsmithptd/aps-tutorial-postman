@@ -225,6 +225,34 @@
   }
   .running-empty{color:var(--muted);}
 
+  .pin-btn{
+    flex-shrink:0;width:18px;height:18px;border-radius:50%;border:1px solid var(--border);
+    background:transparent;color:var(--muted);font-size:10px;line-height:1;padding:0;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .pin-btn.pinned{border-color:var(--accent);color:var(--accent);background:rgba(88,166,255,.12);}
+  .op-row.pinned{border-color:var(--accent);}
+  .pinned-badge{color:var(--accent);}
+
+  .pending-panel{border-top:1px solid var(--border);flex-shrink:0;}
+  .pending-header{
+    display:flex;align-items:center;gap:6px;padding:6px 10px;cursor:pointer;user-select:none;
+    font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;
+  }
+  .pending-header:hover{color:var(--text);}
+  .pending-caret{display:inline-block;transition:transform .15s ease;}
+  .pending-panel.collapsed .pending-caret{transform:rotate(-90deg);}
+  .pending-panel.collapsed .pending-list{display:none;}
+  .pending-list{max-height:160px;overflow-y:auto;padding:0 8px 8px;display:flex;flex-direction:column;gap:5px;}
+  .pending-row{
+    background:var(--panel-2);border:1px dashed var(--border);border-radius:6px;padding:6px 8px;font-size:11px;
+  }
+  .pending-title{font-weight:600;}
+  .pending-title .jid{color:var(--accent);cursor:pointer;}
+  .pending-title .jid:hover{text-decoration:underline;}
+  .pending-sub{color:var(--muted);font-size:10.5px;margin-top:2px;}
+  .pending-empty{color:var(--muted);font-size:11px;padding:6px 8px;}
+
   /* ---------- modal ---------- */
   .modal-overlay{
     position:fixed;inset:0;background:rgba(1,4,9,.6);display:flex;align-items:center;
@@ -410,7 +438,7 @@
         opType, name: `${opType} — Op ${i+1}`,
         workCenter: pick(tmpl.pool),
         durationHours: rand(tmpl.range[0], tmpl.range[1]),
-        status: "pending", blockedReason: null, contentionWarning:false,
+        status: "pending", blockedReason: null, contentionWarning:false, pinned:false,
         backwardStart: null, backwardFinish: null,
         actualStart: null, actualFinish: null,
         employee: null,
@@ -548,7 +576,9 @@
 
   function recomputeJobAggregates(job){
     const routing = job.routing;
-    job.currentOp = routing.find(op=>op.status==="ready"||op.status==="in-progress") || null;
+    const currentIdx = routing.findIndex(op=>op.status==="ready"||op.status==="in-progress");
+    job.currentOp = currentIdx === -1 ? null : routing[currentIdx];
+    job.currentOpIndex = currentIdx === -1 ? null : currentIdx;
     const doneHours = routing.filter(op=>op.status==="done").reduce((s,op)=>s+op.durationHours,0);
     const totalHours = routing.reduce((s,op)=>s+op.durationHours,0);
     job.percentComplete = totalHours>0 ? clamp((doneHours/totalHours)*100,0,100) : 0;
@@ -780,27 +810,66 @@
         </div>
         <div class="running-row" id="running-${m.id}"></div>
         <div class="card-list op-list" id="opList-${m.id}" data-empty-label="No ready operations"></div>
+        <div class="pending-panel collapsed" id="pendingPanel-${m.id}">
+          <div class="pending-header" data-toggle-pending="${m.id}">
+            <span class="pending-caret">▾</span> Waiting on predecessor
+            <span class="count-badge" id="pendingCount-${m.id}">0</span>
+          </div>
+          <div class="pending-list" id="pendingList-${m.id}"></div>
+        </div>
       `;
       board.appendChild(col);
       const listEl = col.querySelector(".op-list");
+      // Drop target for both in-column reorder and cross-column reassignment
+      // (dragging an operation onto a different machine's column re-assigns its
+      // work center, if that machine is a valid alternate for its op type).
       wireDropZone(listEl, () => {
-        state.resourceOrder[m.id] = [...listEl.querySelectorAll(".drag-item")].map(el=>el.dataset.dragId);
+        const newIds = [...listEl.querySelectorAll(".drag-item")].map(el=>el.dataset.dragId);
+        for(const opId of newIds){
+          const op = opsById[opId];
+          if(op.workCenter !== m.id && !OP_TEMPLATES[op.opType].pool.includes(m.id)){
+            renderResourceBoard(); // not a valid work center for this op type — snap back
+            return;
+          }
+        }
+        newIds.forEach(opId => {
+          const op = opsById[opId];
+          if(op.workCenter !== m.id){
+            const oldArr = state.resourceOrder[op.workCenter];
+            const oldIdx = oldArr ? oldArr.indexOf(op.id) : -1;
+            if(oldIdx > -1) oldArr.splice(oldIdx,1);
+            op.workCenter = m.id;
+          }
+        });
+        state.resourceOrder[m.id] = newIds;
+        recomputeAll();
+        renderQueue();
+        renderStrips();
+        renderResourceBoard();
       });
+    });
+    board.addEventListener("click", e => {
+      const header = e.target.closest("[data-toggle-pending]");
+      if(header){
+        document.getElementById(`pendingPanel-${header.dataset.togglePending}`).classList.toggle("collapsed");
+      }
     });
   }
 
   function opRowInnerHTML(op, displayIdx, recommendedRank){
     const job = jobsById[op.jobId];
-    const recDiff = (recommendedRank !== displayIdx)
-      ? `<span class="rec-diff">recommended #${recommendedRank}</span>` : "";
+    const diffBadge = op.pinned
+      ? `<span class="rec-diff pinned-badge">📌 pinned</span>`
+      : (recommendedRank !== displayIdx ? `<span class="rec-diff">recommended #${recommendedRank}</span>` : "");
     const contention = op.contentionWarning ? `<span class="badge risk">⚠ contention</span>` : "";
     return `
       <div class="card-top">
         <div class="rank-badge">${displayIdx}</div>
         <div class="card-main">
-          <div class="card-title"><span class="jid" data-action="open-routing" data-job="${job.id}">${job.id}</span>${op.opType} · Op ${op.seq}/${job.routing.length}${recDiff}</div>
+          <div class="card-title"><span class="jid" data-action="open-routing" data-job="${job.id}">${job.id}</span>${op.opType} · Op ${op.seq}/${job.routing.length}${diffBadge}</div>
           <div class="card-sub">${job.part} · ${op.durationHours.toFixed(1)}h</div>
         </div>
+        <button class="pin-btn ${op.pinned?"pinned":""}" data-action="toggle-pin" data-op="${op.id}" title="${op.pinned?"Unpin":"Pin to top"}">📌</button>
       </div>
       <div class="urgency-row">
         <div class="due-label">Target start ${fmtDateTime(op.backwardStart)}</div>
@@ -811,18 +880,32 @@
 
   function makeOpRowEl(op, displayIdx, recommendedRank){
     const el = document.createElement("div");
-    el.className = "job-card drag-item op-row";
-    el.draggable = true;
+    el.className = `job-card drag-item op-row${op.pinned ? " pinned" : ""}`;
     el.dataset.dragId = op.id;
     el.dataset.opId = op.id;
     el.dataset.jobId = op.jobId;
     el.innerHTML = opRowInnerHTML(op, displayIdx, recommendedRank);
-    el.addEventListener("dragstart", onCardDragStart);
-    el.addEventListener("dragend", onCardDragEnd);
+    if(!op.pinned){
+      el.draggable = true;
+      el.addEventListener("dragstart", onCardDragStart);
+      el.addEventListener("dragend", onCardDragEnd);
+    }
     return el;
   }
 
   function renderResourceBoard(){
+    // Lookahead: for each job, the step immediately after its current one is the
+    // thing "waiting on predecessor" for whichever machine it's destined for.
+    const waitingByMachine = {};
+    MACHINES.forEach(m => { waitingByMachine[m.id] = []; });
+    jobs.forEach(job=>{
+      if(job.blocked || job.currentOpIndex == null) return;
+      const nextOp = job.routing[job.currentOpIndex + 1];
+      if(nextOp && nextOp.status === "pending" && waitingByMachine[nextOp.workCenter]){
+        waitingByMachine[nextOp.workCenter].push({job, nextOp});
+      }
+    });
+
     MACHINES.forEach(m=>{
       const runningJobs = jobs.filter(j=>!j.blocked && j.currentOp && j.currentOp.status==="in-progress" && j.currentOp.workCenter===m.id);
       const runningRowEl = document.getElementById(`running-${m.id}`);
@@ -832,21 +915,37 @@
           : `<span class="running-empty">Idle</span>`;
       }
       const listEl = document.getElementById(`opList-${m.id}`);
-      if(!listEl) return;
-      listEl.innerHTML = "";
-      const ids = state.resourceOrder[m.id] || [];
-      const recRank = {};
-      ids.slice().sort((a,b)=>opsById[a].backwardStart-opsById[b].backwardStart).forEach((id,i)=>{ recRank[id] = i+1; });
-      ids.forEach((opId, idx) => {
-        const op = opsById[opId];
-        if(!op) return;
-        listEl.appendChild(makeOpRowEl(op, idx+1, recRank[opId]));
-      });
-      listEl.classList.toggle("empty", ids.length===0);
-      const countEl = document.getElementById(`resCount-${m.id}`);
-      if(countEl) countEl.textContent = ids.length;
+      if(listEl){
+        listEl.innerHTML = "";
+        const ids = state.resourceOrder[m.id] || [];
+        const pinnedIds = ids.filter(id => opsById[id] && opsById[id].pinned);
+        const unpinnedIds = ids.filter(id => opsById[id] && !opsById[id].pinned);
+        const recRank = {};
+        unpinnedIds.slice().sort((a,b)=>opsById[a].backwardStart-opsById[b].backwardStart).forEach((id,i)=>{ recRank[id] = i+1; });
+        [...pinnedIds, ...unpinnedIds].forEach((opId, idx) => {
+          const op = opsById[opId];
+          if(!op) return;
+          listEl.appendChild(makeOpRowEl(op, idx+1, recRank[opId]));
+        });
+        listEl.classList.toggle("empty", ids.length===0);
+        const countEl = document.getElementById(`resCount-${m.id}`);
+        if(countEl) countEl.textContent = ids.length;
+      }
       const dotEl = document.getElementById(`resDot-${m.id}`);
       if(dotEl) dotEl.className = `dot status-${m.status}`;
+
+      const waitingItems = waitingByMachine[m.id];
+      const pendingListEl = document.getElementById(`pendingList-${m.id}`);
+      if(pendingListEl){
+        pendingListEl.innerHTML = waitingItems.length ? waitingItems.map(({job,nextOp}) => `
+          <div class="pending-row">
+            <div class="pending-title"><span class="jid" data-action="open-routing" data-job="${job.id}">${job.id}</span> ${nextOp.opType} · Op ${nextOp.seq}/${job.routing.length}</div>
+            <div class="pending-sub">Waiting on Op ${job.currentOp.seq} (${job.currentOp.opType}, ${machinesById[job.currentOp.workCenter]?.name || job.currentOp.workCenter}) — ${job.currentOp.status}</div>
+          </div>
+        `).join("") : `<div class="pending-empty">Nothing queued behind current work</div>`;
+      }
+      const pendingCountEl = document.getElementById(`pendingCount-${m.id}`);
+      if(pendingCountEl) pendingCountEl.textContent = waitingItems.length;
     });
   }
 
@@ -930,6 +1029,8 @@
   wireDropZone(queueListEl, () => {
     const job = jobsById[state.draggedId];
     if(!job) return;
+    const wasBlocked = job.blocked;
+    const oldIndex = state.manualOrder.indexOf(job.id);
     if(job.blocked){
       job.blocked = false; job.blockedReason = null; job.blockedAt = null;
       job.history.push({ts:new Date(), actor:"planner", note:"Returned to active queue"});
@@ -937,12 +1038,37 @@
     }
     syncManualOrderFromDOM();
     syncBlockedOrderFromDOM();
+    if(!wasBlocked){
+      const newIndex = state.manualOrder.indexOf(job.id);
+      if(oldIndex !== -1 && newIndex !== -1 && newIndex !== oldIndex){
+        applyPriorityCascade(job, newIndex < oldIndex ? "up" : "down");
+      }
+    }
     recomputeAll();
     renderQueue();
     renderBlocked();
     renderStrips();
     renderResourceBoard();
   });
+
+  // Cascade a manual priority-queue reorder down to the operations level: moving
+  // a job up pins its current (ready) operation to the front of its machine's
+  // column; moving it down releases that pin, letting normal urgency ordering resume.
+  function applyPriorityCascade(job, direction){
+    const op = job.currentOp;
+    if(!op) return;
+    if(direction === "up"){
+      if(op.status !== "ready") return;
+      op.pinned = true;
+      const arr = state.resourceOrder[op.workCenter];
+      if(arr){
+        const idx = arr.indexOf(op.id);
+        if(idx > -1){ arr.splice(idx,1); arr.unshift(op.id); }
+      }
+    } else {
+      op.pinned = false;
+    }
+  }
 
   wireDropZone(blockedListEl, () => {
     const job = jobsById[state.draggedId];
@@ -1021,6 +1147,15 @@
     if(openBtn){
       const job = jobsById[openBtn.dataset.job];
       if(job) openJobRoutingModal(job);
+      return;
+    }
+    const pinBtn = e.target.closest("[data-action='toggle-pin']");
+    if(pinBtn){
+      const op = opsById[pinBtn.dataset.op];
+      if(op){
+        op.pinned = !op.pinned;
+        renderResourceBoard();
+      }
     }
   });
 
