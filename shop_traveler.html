@@ -1053,7 +1053,7 @@
       </svg>
       <div class="scan-input-wrap">
         <label for="scan-pn-input">Scan / Enter Part Number</label>
-        <input type="text" id="scan-pn-input" placeholder="Awaiting scan…" autocomplete="off" readonly>
+        <input type="text" id="scan-pn-input" placeholder="Scan or type part number…" autocomplete="off">
       </div>
     </div>
 
@@ -2263,6 +2263,14 @@ Rules:
     inp.value = pn;
     inp.classList.add('filled');
     setTimeout(() => openInspection(pn), 120);
+  });
+
+  document.getElementById('scan-pn-input').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const val = e.target.value.trim();
+    if (!val) return;
+    e.target.classList.add('filled');
+    openInspection(val);
   });
 
   function openInspection(pn) {
