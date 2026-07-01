@@ -1511,9 +1511,9 @@
 
     // ── Purchase items CSV (auto-exported alongside main CSV if any exist) ──
     const purchaseItems = [];
-    // Packet mode: BOM items with type === 'purchase'
+    // Packet mode: BOM items that have a vendor — vendor presence is the definitive purchase signal
     if (activeMode === 'packet') {
-      allItems.filter(i => i.type === 'purchase').forEach(i => {
+      allItems.filter(i => i.vendor && i.vendor.trim()).forEach(i => {
         purchaseItems.push({
           _partNumber:   i.parentPartNumber || '',
           itemNumber:    '',
@@ -1526,7 +1526,7 @@
     }
     // All modes: purchaseItems arrays on each traveler (hardware lists from drawings)
     travelers.forEach(d => {
-      (d.purchaseItems || []).forEach(item => {
+      (d.purchaseItems || []).filter(item => item.vendor && item.vendor.trim()).forEach(item => {
         purchaseItems.push({
           _partNumber:   d.partNumber          || '',
           itemNumber:    item.itemNumber        || '',
@@ -1773,16 +1773,16 @@ For EACH IMAGE (referenced by its 0-based position index):
 1. Identify the document type: ASSEMBLY DRAWING (shows BOM table), DETAIL DRAWING (single part), or PURCHASE SPEC.
 
 2. Classify each item as:
-   - "assembly": top-level assembly (requires assembly operations)
-   - "sub-assembly": assembled from children (requires assembly operations)
-   - "make": manufactured in-house (requires machining routing)
-   - "purchase": bought item (hardware, bearings, seals, etc.)
+   - "assembly": top-level assembly (requires assembly operations) — manufactured/assembled in-house, no vendor
+   - "sub-assembly": assembled from children (requires assembly operations) — manufactured/assembled in-house, no vendor
+   - "make": manufactured in-house (requires machining routing) — no vendor
+   - "purchase": bought from an outside supplier — ONLY use this type when a vendor/supplier is explicitly listed in the BOM table for that item. Sub-assemblies that are manufactured in-house are NEVER "purchase" even if they appear in a BOM.
 
 3. Assembly/sub-assembly items: generate assembly routing (Resource: ASSEMBLY). Typical ops: Op 10 Part Programming / Modeling, then stage/verify components, install sub-assemblies by name, torque fasteners. End with Op 2000 Final Inspection (INSPECT) and Op 2010 Shipping (SHIP).
 
 4. Make items: generate complete CNC machining routing. Study all views, dimensions, tolerances, GD&T, surface finish. Group by logical setups (one clamping = one op). Sequence: raw stock → rough → finish → grind → outside process. Resources: ${getOpTypes().join(' | ')}
 
-5. Purchase items: extract vendor/description from BOM table on the assembly drawing.
+5. Purchase items: extract vendor/description from BOM table on the assembly drawing. A row in the BOM is a purchase item ONLY if a supplier/vendor name is visible for that row — otherwise classify as make or sub-assembly.
 
 6. Track parent-child relationships using part numbers from BOM tables.
    - childPartNumbers: list of part numbers in this item's BOM
@@ -1833,7 +1833,7 @@ Rules:
 - materialGrade: grade/temper/condition if specified (e.g. "4140", "T6", "Annealed") — "" if not called out
 - materialStandard: governing spec if shown (e.g. "AMS 6349", "ASTM B209", "MIL-S-5626") — "" if not shown
 - outsideProcessingType / milSpec / additionalSpecOptions: set on OUTSIDE PROC operations only — the finish type, mil spec, and extra options for that specific op; use "" on all other ops
-- For purchase-type items: populate vendor (supplier/manufacturer from BOM table) and catalogNumber (vendor part number from BOM table); set operations: []
+- For purchase-type items: populate vendor (supplier/manufacturer from BOM table) and catalogNumber (vendor part number from BOM table); set operations: []. Leave vendor: "" for all make/assembly/sub-assembly items — vendor presence is the definitive signal that something is bought rather than made in-house
 - Return raw JSON only, no code fences`;
 
     const content = [
