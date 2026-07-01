@@ -83,18 +83,33 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
 
+.search-input {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-size: 0.95rem;
+  min-height: 44px;
+  width: 100%;
+  max-width: 480px;
+}
+.search-input:focus { outline: none; border-color: var(--accent); }
+.search-input::placeholder { color: var(--text-dim); }
+
 .list-summary { color: var(--text-dim); font-size: 0.9rem; }
-.task-row-list { display: flex; flex-direction: column; gap: 10px; }
-.task-row {
-  display: grid; grid-template-columns: 48px 1fr auto auto; align-items: center; gap: 16px;
+.job-row-list { display: flex; flex-direction: column; gap: 10px; }
+.job-row {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
   padding: 14px 18px; min-height: 44px; text-align: left; color: var(--text); width: 100%;
 }
-.task-row:hover { border-color: var(--accent); }
-.task-row-number { font-family: var(--font-mono); font-size: 1.4rem; color: var(--text-dim); }
-.task-row-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.task-row-name { font-weight: 600; font-size: 1rem; }
-.task-row-sub { font-size: 0.8rem; color: var(--text-dim); display: flex; gap: 8px; flex-wrap: wrap; }
+.job-row:hover { border-color: var(--accent); }
+.job-row-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.job-row-name { font-weight: 600; font-size: 1rem; }
+.job-row-sub { font-size: 0.8rem; color: var(--text-dim); display: flex; gap: 10px; flex-wrap: wrap; }
+.job-row-progress { font-size: 0.85rem; color: var(--text-dim); white-space: nowrap; }
+
 .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; }
 .badge-segment { background: var(--panel-alt); color: var(--text-dim); border: 1px solid var(--border); }
 .badge-status { color: #05131f; }
@@ -102,10 +117,40 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .badge-status.in-progress { background: var(--status-inprogress); }
 .badge-status.paused { background: var(--status-paused); }
 .badge-status.complete { background: var(--status-complete); }
-.task-row-time { font-family: var(--font-mono); text-align: right; font-size: 0.95rem; color: var(--text-dim); white-space: nowrap; }
-.task-row-time strong { color: var(--text); }
 
-.detail-layout { flex: 1; display: grid; grid-template-columns: 1fr 280px; gap: 20px; min-height: 0; }
+.job-header { display: flex; flex-direction: column; gap: 4px; }
+.job-header-name { font-size: 1.3rem; font-weight: 700; }
+.job-header-sub { font-size: 0.85rem; color: var(--text-dim); }
+
+.workspace-layout { flex: 1; display: grid; grid-template-columns: 260px 1fr 280px; gap: 20px; min-height: 0; }
+.workspace-sidebar {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.workspace-sidebar-header {
+  padding: 14px 16px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-dim); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.operation-row-list { overflow-y: auto; display: flex; flex-direction: column; }
+.operation-row {
+  display: flex; flex-direction: column; gap: 4px; align-items: stretch;
+  background: transparent; border: none; border-bottom: 1px solid var(--border);
+  padding: 10px 16px; text-align: left; color: var(--text); width: 100%;
+}
+.operation-row:last-child { border-bottom: none; }
+.operation-row:hover { background: var(--panel-alt); }
+.operation-row.selected { background: var(--panel-alt); box-shadow: inset 2px 0 0 var(--accent); }
+.operation-row-number { font-family: var(--font-mono); color: var(--text-dim); font-size: 0.8rem; }
+.operation-row-info { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.operation-row-name { font-size: 0.9rem; font-weight: 600; }
+.operation-row-time { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim); }
+
+.workspace-main { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+.workspace-parts {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; display: flex;
+}
+
 .detail-main {
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 24px;
   display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
@@ -114,18 +159,21 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .detail-name { font-size: 1.6rem; font-weight: 700; margin: 0; }
 .detail-category { color: var(--accent); font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 .detail-description { color: var(--text-dim); line-height: 1.5; max-width: 60ch; }
-.detail-sidebar { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; display: flex; overflow: hidden; }
+
 .parts-list { flex: 1; overflow-y: auto; }
-.parts-list-header { padding: 14px 16px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); border-bottom: 1px solid var(--border); }
-.part-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+.parts-list-header {
+  padding: 14px 16px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-dim); border-bottom: 1px solid var(--border);
+}
+.part-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 0.9rem;
+}
 .part-row:last-child { border-bottom: none; }
 .part-qty { color: var(--text-dim); font-family: var(--font-mono); }
-.sidebar-tabs { width: 44px; border-left: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 12px; gap: 4px; }
-.sidebar-tab { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--text-dim); background: transparent; border: none; font-size: 1.1rem; }
-.sidebar-tab.active { background: var(--panel-alt); color: var(--text); }
 
 .control-bar {
-  background: var(--panel); border-top: 1px solid var(--border); padding: 16px 24px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px 24px;
   display: flex; align-items: center; gap: 24px; flex-shrink: 0;
 }
 .control-step { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
@@ -142,14 +190,22 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .btn-toggle { min-width: 120px; min-height: 44px; border-radius: 6px; font-weight: 700; font-size: 1rem; border: none; }
 .btn-toggle.start { background: var(--status-inprogress); color: #05130a; }
 .btn-toggle.pause { background: var(--status-paused); color: #201400; }
-.btn-complete { min-height: 44px; border-radius: 6px; font-weight: 700; padding: 0 20px; background: var(--accent); color: #05131f; border: none; }
-.btn-flag { min-width: 44px; min-height: 44px; border-radius: 6px; background: transparent; border: 1px solid var(--border); color: var(--text-dim); font-size: 1.1rem; }
-.back-link { color: var(--text-dim); text-decoration: none; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 0; }
+.btn-complete {
+  min-height: 44px; border-radius: 6px; font-weight: 700; padding: 0 20px;
+  background: var(--accent); color: #05131f; border: none;
+}
+
+.back-link {
+  color: var(--text-dim); text-decoration: none; font-size: 0.85rem;
+  display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 0;
+}
 .back-link:hover { color: var(--text); }
 
 @media (max-width: 900px) {
-  .detail-layout { grid-template-columns: 1fr; }
-  .detail-sidebar { order: 2; }
+  .workspace-layout { grid-template-columns: 1fr; }
+  .workspace-sidebar { order: 1; max-height: 240px; }
+  .workspace-main { order: 2; }
+  .workspace-parts { order: 3; }
   .control-bar { flex-wrap: wrap; }
 }
 </style>
@@ -187,34 +243,62 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
     </div>
   </section>
 
-  <!-- Task list screen -->
+  <!-- Jobs list screen -->
   <section class="screen" id="screen-list">
     <button class="back-link" id="switchOperatorLink">&larr; Switch operator/workstation</button>
+    <input type="text" class="search-input" id="jobSearchInput" placeholder="Search jobs by name, work order, or product..." />
     <div class="list-summary" id="listSummary"></div>
-    <div class="task-row-list" id="taskRowList"></div>
+    <div class="job-row-list" id="jobRowList"></div>
   </section>
 
-  <!-- Task detail screen -->
-  <section class="screen" id="screen-task" style="flex-direction: row;">
-    <div class="detail-layout" style="flex: 1;">
-      <div class="detail-main">
-        <button class="back-link" id="backToListLink">&larr; Back to task list</button>
-        <span class="detail-op-number" id="detailOpNumber"></span>
-        <h1 class="detail-name" id="detailName"></h1>
-        <span class="detail-category" id="detailCategory"></span>
-        <span class="badge badge-segment" id="detailSegment" style="width: fit-content;"></span>
-        <p class="detail-description" id="detailDescription"></p>
+  <!-- Job workspace screen -->
+  <section class="screen" id="screen-job">
+    <button class="back-link" id="backToListLink">&larr; Back to job list</button>
+    <div class="job-header">
+      <span class="job-header-name" id="jobHeaderName"></span>
+      <span class="job-header-sub" id="jobHeaderSub"></span>
+    </div>
+
+    <div class="workspace-layout">
+      <div class="workspace-sidebar">
+        <div class="workspace-sidebar-header">Operations</div>
+        <div class="operation-row-list" id="operationRowList"></div>
       </div>
-      <div class="detail-sidebar">
-        <div class="parts-list">
-          <div class="parts-list-header">Parts / Materials</div>
-          <div id="partsListBody"></div>
+
+      <div class="workspace-main">
+        <div class="detail-main">
+          <span class="detail-op-number" id="detailOpNumber"></span>
+          <h1 class="detail-name" id="detailName"></h1>
+          <span class="detail-category" id="detailCategory"></span>
+          <span class="badge badge-segment" id="detailSegment" style="width: fit-content;"></span>
+          <p class="detail-description" id="detailDescription"></p>
         </div>
-        <div class="sidebar-tabs">
-          <button class="sidebar-tab active" title="Parts">&#9635;</button>
-          <button class="sidebar-tab" title="History" disabled>&#8635;</button>
-          <button class="sidebar-tab" title="Comments" disabled>&#128172;</button>
-          <button class="sidebar-tab" title="Settings" disabled>&#9881;</button>
+
+        <div class="control-bar">
+          <div class="control-step">
+            <span class="control-status">
+              <span class="status-dot" id="statusDot"></span>
+              <span id="statusText">--</span>
+            </span>
+            <span id="stepLabel">Step --</span>
+          </div>
+          <div class="control-readout">
+            <span class="control-elapsed" id="elapsedReadout">00:00</span>
+          </div>
+          <div class="control-target">
+            TAKT
+            <strong id="targetReadout">--</strong>
+          </div>
+          <div class="control-spacer"></div>
+          <button class="btn-toggle start" id="toggleBtn">Start</button>
+          <button class="btn-complete" id="completeBtn">Complete</button>
+        </div>
+      </div>
+
+      <div class="workspace-parts">
+        <div class="parts-list">
+          <div class="parts-list-header">Required Inputs</div>
+          <div id="partsListBody"></div>
         </div>
       </div>
     </div>
@@ -222,34 +306,12 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 
 </main>
 
-<!-- Bottom control bar (only visible on task screen) -->
-<footer class="control-bar" id="controlBar" style="display: none;">
-  <div class="control-step">
-    <span class="control-status">
-      <span class="status-dot" id="statusDot"></span>
-      <span id="statusText">--</span>
-    </span>
-    <span id="stepLabel">Step --</span>
-  </div>
-  <div class="control-readout">
-    <span class="control-elapsed" id="elapsedReadout">00:00</span>
-  </div>
-  <div class="control-target">
-    TAKT
-    <strong id="targetReadout">--</strong>
-  </div>
-  <div class="control-spacer"></div>
-  <button class="btn-toggle start" id="toggleBtn">Start</button>
-  <button class="btn-complete" id="completeBtn">Complete</button>
-  <button class="btn-flag" title="Report issue" disabled>&#9873;</button>
-</footer>
-
 <script>
 /* ---------------------------------------------------------------------
  * Seed data
  * ------------------------------------------------------------------- */
 const SEED_DATA = {
-  version: 1,
+  version: 2,
   WORKSTATIONS: [
     { id: "WS-A92", label: "A-92" },
     { id: "WS-B14", label: "B-14" },
@@ -284,19 +346,47 @@ const SEED_DATA = {
     { id: "SEG-ENGINE", name: "Engine Assembly" },
     { id: "SEG-LAUNCH", name: "Launch Interface" },
   ],
-  TASKS: [
-    { id: "TASK-001", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "01", name: "Engine ASSY", category: "Parts Retrieval", description: "Retrieve and stage all engine assembly parts at the workstation.", targetSeconds: 420, order: 1, parts: [{ partId: "PT-ENGMOUNT", qty: 1 }, { partId: "PT-NAS14N", qty: 1 }] },
-    { id: "TASK-002", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "02", name: "Fixture Setup", category: "Frame Prep", description: "Set up the assembly fixture and align the frame for engine mounting.", targetSeconds: 420, order: 2, parts: [{ partId: "PT-WASHER", qty: 4 }, { partId: "PT-NAS15N", qty: 2 }] },
-    { id: "TASK-003", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "03", name: "Mount Install", category: "Assembly", description: "Install engine mounts and torque to spec.", targetSeconds: 420, order: 3, parts: [{ partId: "PT-ENGMOUNT", qty: 2 }, { partId: "PT-BLASTSHIELD", qty: 1 }] },
-    { id: "TASK-004", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-POWER", opNumber: "04", name: "Motor Wiring", category: "Electrical", description: "Route and connect motor wiring harness, secure with clips.", targetSeconds: 420, order: 4, parts: [{ partId: "PT-FUELLINE", qty: 1 }, { partId: "PT-VAPORTUBE", qty: 1 }] },
-    { id: "TASK-005", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "05", name: "Alignment Check", category: "Quality", description: "Verify engine alignment against jig tolerances and log readings.", targetSeconds: 300, order: 5, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
-    { id: "TASK-006", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-LAUNCH", opNumber: "06", name: "Final Inspection", category: "Quality", description: "Perform final visual and torque-stripe inspection before sign-off.", targetSeconds: 300, order: 6, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
-    { id: "TASK-101", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "01", name: "Spar Prep", category: "Parts Retrieval", description: "Retrieve wing spar and inspect for shipping damage before staging.", targetSeconds: 360, order: 1, parts: [{ partId: "PT-SPAR", qty: 1 }] },
-    { id: "TASK-102", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "02", name: "Skin Fitting", category: "Assembly", description: "Fit skin panels to the spar and clamp in position.", targetSeconds: 480, order: 2, parts: [{ partId: "PT-SKIN", qty: 2 }, { partId: "PT-SEALANT", qty: 1 }] },
-    { id: "TASK-103", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "03", name: "Rivet Install", category: "Assembly", description: "Drill and set rivets along the skin-to-spar seam per pattern.", targetSeconds: 600, order: 3, parts: [{ partId: "PT-RIVET", qty: 24 }] },
-    { id: "TASK-104", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-TAIL", opNumber: "04", name: "Control Surface", category: "Assembly", description: "Install control surface hinges and check freedom of movement.", targetSeconds: 420, order: 4, parts: [{ partId: "PT-HINGE", qty: 2 }, { partId: "PT-NAS14N", qty: 4 }] },
-    { id: "TASK-105", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "05", name: "Paint Prep", category: "Finishing", description: "Mask fasteners and clean surfaces in preparation for paint.", targetSeconds: 300, order: 5, parts: [{ partId: "PT-SEALANT", qty: 1 }] },
-    { id: "TASK-106", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "06", name: "QA Check", category: "Quality", description: "Complete quality checklist and tag the assembly for hand-off.", targetSeconds: 300, order: 6, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
+  JOBS: [
+    { id: "JOB-001", name: "Engine Build — Unit 14", workOrderNo: "WO-4471", productName: "BARRACUDA-250 Engine Assembly", operatorId: "OP-001", workstationId: "WS-A92", order: 1 },
+    { id: "JOB-002", name: "Engine Rebuild — Unit 15", workOrderNo: "WO-4472", productName: "BARRACUDA-250 Engine Assembly", operatorId: "OP-001", workstationId: "WS-A92", order: 2 },
+    { id: "JOB-003", name: "Wing Build — Ship 7", workOrderNo: "WO-5108", productName: "BARRACUDA-250 Wing Set", operatorId: "OP-002", workstationId: "WS-B14", order: 1 },
+    { id: "JOB-004", name: "Wing Build — Ship 8", workOrderNo: "WO-5109", productName: "BARRACUDA-250 Wing Set", operatorId: "OP-002", workstationId: "WS-B14", order: 2 },
+    { id: "JOB-005", name: "Payload Bay Fit-Out — Unit 3", workOrderNo: "WO-6203", productName: "BARRACUDA-250 Payload Module", operatorId: "OP-003", workstationId: "WS-C03", order: 1 },
+    { id: "JOB-006", name: "Launch Interface QA — Unit 3", workOrderNo: "WO-6204", productName: "BARRACUDA-250 Payload Module", operatorId: "OP-003", workstationId: "WS-C03", order: 2 },
+  ],
+  OPERATIONS: [
+    { id: "TASK-001", jobId: "JOB-001", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "01", name: "Engine ASSY", category: "Parts Retrieval", description: "Retrieve and stage all engine assembly parts at the workstation.", targetSeconds: 420, order: 1, parts: [{ partId: "PT-ENGMOUNT", qty: 1 }, { partId: "PT-NAS14N", qty: 1 }] },
+    { id: "TASK-002", jobId: "JOB-001", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "02", name: "Fixture Setup", category: "Frame Prep", description: "Set up the assembly fixture and align the frame for engine mounting.", targetSeconds: 420, order: 2, parts: [{ partId: "PT-WASHER", qty: 4 }, { partId: "PT-NAS15N", qty: 2 }] },
+    { id: "TASK-003", jobId: "JOB-001", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "03", name: "Mount Install", category: "Assembly", description: "Install engine mounts and torque to spec.", targetSeconds: 420, order: 3, parts: [{ partId: "PT-ENGMOUNT", qty: 2 }, { partId: "PT-BLASTSHIELD", qty: 1 }] },
+    { id: "TASK-004", jobId: "JOB-001", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-POWER", opNumber: "04", name: "Motor Wiring", category: "Electrical", description: "Route and connect motor wiring harness, secure with clips.", targetSeconds: 420, order: 4, parts: [{ partId: "PT-FUELLINE", qty: 1 }, { partId: "PT-VAPORTUBE", qty: 1 }] },
+    { id: "TASK-005", jobId: "JOB-001", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "05", name: "Alignment Check", category: "Quality", description: "Verify engine alignment against jig tolerances and log readings.", targetSeconds: 300, order: 5, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
+    { id: "TASK-006", jobId: "JOB-001", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-LAUNCH", opNumber: "06", name: "Final Inspection", category: "Quality", description: "Perform final visual and torque-stripe inspection before sign-off.", targetSeconds: 300, order: 6, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
+
+    { id: "TASK-201", jobId: "JOB-002", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "01", name: "Teardown & Inspect", category: "Disassembly", description: "Remove existing engine components and inspect for wear or damage.", targetSeconds: 360, order: 1, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
+    { id: "TASK-202", jobId: "JOB-002", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-ENGINE", opNumber: "02", name: "Mount Replace", category: "Assembly", description: "Install replacement engine mounts and torque to spec.", targetSeconds: 420, order: 2, parts: [{ partId: "PT-ENGMOUNT", qty: 2 }, { partId: "PT-NAS14N", qty: 2 }] },
+    { id: "TASK-203", jobId: "JOB-002", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-POWER", opNumber: "03", name: "Wiring Re-terminate", category: "Electrical", description: "Re-terminate motor wiring harness connections and secure routing.", targetSeconds: 420, order: 3, parts: [{ partId: "PT-FUELLINE", qty: 1 }, { partId: "PT-VAPORTUBE", qty: 1 }] },
+    { id: "TASK-204", jobId: "JOB-002", operatorId: "OP-001", workstationId: "WS-A92", segmentId: "SEG-LAUNCH", opNumber: "04", name: "Final Inspection", category: "Quality", description: "Perform final visual and torque-stripe inspection before sign-off.", targetSeconds: 300, order: 4, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
+
+    { id: "TASK-101", jobId: "JOB-003", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "01", name: "Spar Prep", category: "Parts Retrieval", description: "Retrieve wing spar and inspect for shipping damage before staging.", targetSeconds: 360, order: 1, parts: [{ partId: "PT-SPAR", qty: 1 }] },
+    { id: "TASK-102", jobId: "JOB-003", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "02", name: "Skin Fitting", category: "Assembly", description: "Fit skin panels to the spar and clamp in position.", targetSeconds: 480, order: 2, parts: [{ partId: "PT-SKIN", qty: 2 }, { partId: "PT-SEALANT", qty: 1 }] },
+    { id: "TASK-103", jobId: "JOB-003", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "03", name: "Rivet Install", category: "Assembly", description: "Drill and set rivets along the skin-to-spar seam per pattern.", targetSeconds: 600, order: 3, parts: [{ partId: "PT-RIVET", qty: 24 }] },
+    { id: "TASK-104", jobId: "JOB-003", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-TAIL", opNumber: "04", name: "Control Surface", category: "Assembly", description: "Install control surface hinges and check freedom of movement.", targetSeconds: 420, order: 4, parts: [{ partId: "PT-HINGE", qty: 2 }, { partId: "PT-NAS14N", qty: 4 }] },
+    { id: "TASK-105", jobId: "JOB-003", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "05", name: "Paint Prep", category: "Finishing", description: "Mask fasteners and clean surfaces in preparation for paint.", targetSeconds: 300, order: 5, parts: [{ partId: "PT-SEALANT", qty: 1 }] },
+    { id: "TASK-106", jobId: "JOB-003", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "06", name: "QA Check", category: "Quality", description: "Complete quality checklist and tag the assembly for hand-off.", targetSeconds: 300, order: 6, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
+
+    { id: "TASK-301", jobId: "JOB-004", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "01", name: "Spar Prep", category: "Parts Retrieval", description: "Retrieve wing spar and inspect for shipping damage before staging.", targetSeconds: 360, order: 1, parts: [{ partId: "PT-SPAR", qty: 1 }] },
+    { id: "TASK-302", jobId: "JOB-004", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "02", name: "Skin Fitting", category: "Assembly", description: "Fit skin panels to the spar and clamp in position.", targetSeconds: 480, order: 2, parts: [{ partId: "PT-SKIN", qty: 2 }, { partId: "PT-SEALANT", qty: 1 }] },
+    { id: "TASK-303", jobId: "JOB-004", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "03", name: "Rivet Install", category: "Assembly", description: "Drill and set rivets along the skin-to-spar seam per pattern.", targetSeconds: 600, order: 3, parts: [{ partId: "PT-RIVET", qty: 24 }] },
+    { id: "TASK-304", jobId: "JOB-004", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-TAIL", opNumber: "04", name: "Control Surface", category: "Assembly", description: "Install control surface hinges and check freedom of movement.", targetSeconds: 420, order: 4, parts: [{ partId: "PT-HINGE", qty: 2 }, { partId: "PT-NAS14N", qty: 4 }] },
+    { id: "TASK-305", jobId: "JOB-004", operatorId: "OP-002", workstationId: "WS-B14", segmentId: "SEG-WING", opNumber: "05", name: "QA Check", category: "Quality", description: "Complete quality checklist and tag the assembly for hand-off.", targetSeconds: 300, order: 5, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
+
+    { id: "TASK-401", jobId: "JOB-005", operatorId: "OP-003", workstationId: "WS-C03", segmentId: "SEG-PAYLOAD", opNumber: "01", name: "Bay Prep", category: "Parts Retrieval", description: "Clear and stage the payload bay for fit-out.", targetSeconds: 360, order: 1, parts: [{ partId: "PT-NAS15N", qty: 4 }] },
+    { id: "TASK-402", jobId: "JOB-005", operatorId: "OP-003", workstationId: "WS-C03", segmentId: "SEG-PAYLOAD", opNumber: "02", name: "Bracket Install", category: "Assembly", description: "Install mounting brackets and secure with washers per spec.", targetSeconds: 420, order: 2, parts: [{ partId: "PT-ENGMOUNT", qty: 1 }, { partId: "PT-WASHER", qty: 4 }] },
+    { id: "TASK-403", jobId: "JOB-005", operatorId: "OP-003", workstationId: "WS-C03", segmentId: "SEG-PAYLOAD", opNumber: "03", name: "Seal & Inspect", category: "Quality", description: "Apply sealant and complete final inspection of the payload bay.", targetSeconds: 300, order: 3, parts: [{ partId: "PT-SEALANT", qty: 1 }, { partId: "PT-INSPECTTAG", qty: 1 }] },
+
+    { id: "TASK-501", jobId: "JOB-006", operatorId: "OP-003", workstationId: "WS-C03", segmentId: "SEG-LAUNCH", opNumber: "01", name: "Interface Torque Check", category: "Quality", description: "Verify torque on all launch interface fasteners against spec.", targetSeconds: 300, order: 1, parts: [{ partId: "PT-NAS14N", qty: 6 }] },
+    { id: "TASK-502", jobId: "JOB-006", operatorId: "OP-003", workstationId: "WS-C03", segmentId: "SEG-LAUNCH", opNumber: "02", name: "Umbilical Fit Check", category: "Assembly", description: "Confirm umbilical connector fit and line routing clearance.", targetSeconds: 420, order: 2, parts: [{ partId: "PT-VAPORTUBE", qty: 1 }, { partId: "PT-FUELLINE", qty: 1 }] },
+    { id: "TASK-503", jobId: "JOB-006", operatorId: "OP-003", workstationId: "WS-C03", segmentId: "SEG-LAUNCH", opNumber: "03", name: "Final Sign-off", category: "Quality", description: "Complete final QA checklist and tag the interface for hand-off.", targetSeconds: 240, order: 3, parts: [{ partId: "PT-INSPECTTAG", qty: 1 }] },
   ],
 };
 
@@ -305,90 +395,119 @@ const SEED_DATA = {
  * ------------------------------------------------------------------- */
 const STORAGE_KEYS = {
   seedVersion: "sft.seedVersion",
-  tasks: "sft.tasks",
+  operations: "sft.operations",
   currentOperatorId: "sft.currentOperatorId",
   currentWorkstationId: "sft.currentWorkstationId",
-  activeTaskId: "sft.activeTaskId",
+  activeJobId: "sft.activeJobId",
+  activeOperationIdByJob: "sft.activeOperationIdByJob",
 };
 
 function ensureSeeded() {
   const storedVersion = localStorage.getItem(STORAGE_KEYS.seedVersion);
-  const storedTasks = localStorage.getItem(STORAGE_KEYS.tasks);
-  if (storedVersion !== String(SEED_DATA.version) || !storedTasks) {
-    const liveTasks = SEED_DATA.TASKS.map((task) => ({
-      ...task,
+  const storedOperations = localStorage.getItem(STORAGE_KEYS.operations);
+  if (storedVersion !== String(SEED_DATA.version) || !storedOperations) {
+    const liveOperations = SEED_DATA.OPERATIONS.map((op) => ({
+      ...op,
       status: "pending",
       accumulatedSeconds: 0,
       runningStartTs: null,
       completedAtTs: null,
       logEntries: [],
     }));
-    localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(liveTasks));
+    localStorage.setItem(STORAGE_KEYS.operations, JSON.stringify(liveOperations));
     localStorage.setItem(STORAGE_KEYS.seedVersion, String(SEED_DATA.version));
   }
 }
 
-function getTasks() { return JSON.parse(localStorage.getItem(STORAGE_KEYS.tasks) || "[]"); }
-function saveTasks(tasks) { localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks)); }
-function getTasksForOperator(operatorId) {
-  return getTasks().filter((t) => t.operatorId === operatorId).sort((a, b) => a.order - b.order);
+function getOperations() { return JSON.parse(localStorage.getItem(STORAGE_KEYS.operations) || "[]"); }
+function saveOperations(operations) { localStorage.setItem(STORAGE_KEYS.operations, JSON.stringify(operations)); }
+function getOperationsForJob(jobId) {
+  return getOperations().filter((o) => o.jobId === jobId).sort((a, b) => a.order - b.order);
 }
-function getTaskById(taskId) { return getTasks().find((t) => t.id === taskId) || null; }
-function updateTask(updatedTask) {
-  const tasks = getTasks();
-  const index = tasks.findIndex((t) => t.id === updatedTask.id);
-  if (index !== -1) { tasks[index] = updatedTask; saveTasks(tasks); }
+function getOperationById(operationId) { return getOperations().find((o) => o.id === operationId) || null; }
+function updateOperation(updatedOperation) {
+  const operations = getOperations();
+  const index = operations.findIndex((o) => o.id === updatedOperation.id);
+  if (index !== -1) { operations[index] = updatedOperation; saveOperations(operations); }
 }
+
+function getJobs() { return SEED_DATA.JOBS.slice(); }
+function getJobsForOperator(operatorId) {
+  return getJobs().filter((j) => j.operatorId === operatorId).sort((a, b) => a.order - b.order);
+}
+function getJobById(jobId) { return SEED_DATA.JOBS.find((j) => j.id === jobId) || null; }
+function getJobProgress(jobId) {
+  const operations = getOperationsForJob(jobId);
+  const total = operations.length;
+  const completeCount = operations.filter((o) => o.status === "complete").length;
+  const anyStarted = operations.some((o) => o.status === "in-progress" || o.status === "paused" || o.status === "complete");
+  let aggregateStatus;
+  if (total > 0 && completeCount === total) aggregateStatus = "complete";
+  else if (anyStarted) aggregateStatus = "in-progress";
+  else aggregateStatus = "pending";
+  return { completeCount, total, aggregateStatus };
+}
+
 function getCurrentOperatorId() { return localStorage.getItem(STORAGE_KEYS.currentOperatorId); }
 function getCurrentWorkstationId() { return localStorage.getItem(STORAGE_KEYS.currentWorkstationId); }
 function setCurrentSelection(operatorId, workstationId) {
   localStorage.setItem(STORAGE_KEYS.currentOperatorId, operatorId);
   localStorage.setItem(STORAGE_KEYS.currentWorkstationId, workstationId);
 }
-function getActiveTaskId() { return localStorage.getItem(STORAGE_KEYS.activeTaskId); }
-function setActiveTaskId(taskId) { localStorage.setItem(STORAGE_KEYS.activeTaskId, taskId); }
-function findOperator(id) { return SEED_DATA.OPERATORS.find((o) => o.id === id) || null; }
-function findWorkstation(id) { return SEED_DATA.WORKSTATIONS.find((w) => w.id === id) || null; }
-function findSegment(id) { return SEED_DATA.SEGMENTS.find((s) => s.id === id) || null; }
-function findPart(id) { return SEED_DATA.PARTS.find((p) => p.id === id) || null; }
+function getActiveJobId() { return localStorage.getItem(STORAGE_KEYS.activeJobId); }
+function setActiveJobId(jobId) { localStorage.setItem(STORAGE_KEYS.activeJobId, jobId); }
+function getActiveOperationIdForJob(jobId) {
+  const map = JSON.parse(localStorage.getItem(STORAGE_KEYS.activeOperationIdByJob) || "{}");
+  return map[jobId] || null;
+}
+function setActiveOperationIdForJob(jobId, operationId) {
+  const map = JSON.parse(localStorage.getItem(STORAGE_KEYS.activeOperationIdByJob) || "{}");
+  map[jobId] = operationId;
+  localStorage.setItem(STORAGE_KEYS.activeOperationIdByJob, JSON.stringify(map));
+}
+
+function findOperator(operatorId) { return SEED_DATA.OPERATORS.find((o) => o.id === operatorId) || null; }
+function findWorkstation(workstationId) { return SEED_DATA.WORKSTATIONS.find((w) => w.id === workstationId) || null; }
+function findSegment(segmentId) { return SEED_DATA.SEGMENTS.find((s) => s.id === segmentId) || null; }
+function findPart(partId) { return SEED_DATA.PARTS.find((p) => p.id === partId) || null; }
 
 /* ---------------------------------------------------------------------
  * Timer logic
  * ------------------------------------------------------------------- */
-function getElapsedSeconds(task) {
-  const runningSeconds = task.runningStartTs ? Math.floor((Date.now() - task.runningStartTs) / 1000) : 0;
-  return task.accumulatedSeconds + runningSeconds;
+function getElapsedSeconds(operation) {
+  const runningSeconds = operation.runningStartTs ? Math.floor((Date.now() - operation.runningStartTs) / 1000) : 0;
+  return operation.accumulatedSeconds + runningSeconds;
 }
-function startTask(task) {
-  if (task.runningStartTs) return task;
-  const tasks = getTasks();
-  tasks.forEach((t) => {
-    if (t.id !== task.id && t.operatorId === task.operatorId && t.runningStartTs) pauseTask(t);
+function startOperation(operation) {
+  if (operation.runningStartTs) return operation;
+  const operations = getOperations();
+  operations.forEach((o) => {
+    if (o.id !== operation.id && o.operatorId === operation.operatorId && o.runningStartTs) pauseOperation(o);
   });
-  task.status = "in-progress";
-  task.runningStartTs = Date.now();
-  task.logEntries.push({ startTs: task.runningStartTs, endTs: null, seconds: null });
-  updateTask(task);
-  return task;
+  operation.status = "in-progress";
+  operation.runningStartTs = Date.now();
+  operation.logEntries.push({ startTs: operation.runningStartTs, endTs: null, seconds: null });
+  updateOperation(operation);
+  return operation;
 }
-function pauseTask(task) {
-  if (!task.runningStartTs) return task;
+function pauseOperation(operation) {
+  if (!operation.runningStartTs) return operation;
   const now = Date.now();
-  const elapsedThisRun = Math.floor((now - task.runningStartTs) / 1000);
-  task.accumulatedSeconds += elapsedThisRun;
-  task.status = "paused";
-  const openEntry = task.logEntries[task.logEntries.length - 1];
+  const elapsedThisRun = Math.floor((now - operation.runningStartTs) / 1000);
+  operation.accumulatedSeconds += elapsedThisRun;
+  operation.status = "paused";
+  const openEntry = operation.logEntries[operation.logEntries.length - 1];
   if (openEntry && openEntry.endTs === null) { openEntry.endTs = now; openEntry.seconds = elapsedThisRun; }
-  task.runningStartTs = null;
-  updateTask(task);
-  return task;
+  operation.runningStartTs = null;
+  updateOperation(operation);
+  return operation;
 }
-function completeTask(task) {
-  if (task.runningStartTs) task = pauseTask(task);
-  task.status = "complete";
-  task.completedAtTs = Date.now();
-  updateTask(task);
-  return task;
+function completeOperation(operation) {
+  if (operation.runningStartTs) operation = pauseOperation(operation);
+  operation.status = "complete";
+  operation.completedAtTs = Date.now();
+  updateOperation(operation);
+  return operation;
 }
 function formatHMS(totalSeconds) {
   const seconds = Math.max(0, Math.floor(totalSeconds));
@@ -407,35 +526,26 @@ function formatMS(totalSeconds) {
 
 /* ---------------------------------------------------------------------
  * View router (single page, no navigation/reload — state stays in JS
- * memory for "current screen" but all task/timer data lives in
+ * memory for "current screen" but all job/operation/timer data lives in
  * localStorage so nothing is lost if the page is refreshed).
  * ------------------------------------------------------------------- */
 let currentScreen = "picker";
 let currentListOperatorId = null;
-let currentTaskId = null;
+let currentJobId = null;
+let currentOperationId = null;
 let selectedWorkstationId = null;
 let selectedOperatorId = null;
+let searchTerm = "";
 
 function showScreen(name) {
   currentScreen = name;
   document.querySelectorAll(".screen").forEach((el) => el.classList.remove("active"));
   document.getElementById(`screen-${name}`).classList.add("active");
-  document.getElementById("controlBar").style.display = name === "task" ? "flex" : "none";
   document.getElementById("headerContext").style.display = name === "picker" ? "none" : "inline";
 }
 
 function renderClock() {
   document.getElementById("clock").textContent = new Date().toLocaleTimeString("en-US", { hour12: false });
-}
-
-function renderHeaderContext() {
-  const operatorId = currentScreen === "task"
-    ? (getTaskById(currentTaskId) || {}).operatorId
-    : currentListOperatorId;
-  const operator = findOperator(operatorId);
-  const workstation = findWorkstation(getCurrentWorkstationId());
-  document.getElementById("operatorLabel").textContent = operator ? operator.name : "--";
-  document.getElementById("workstationLabel").textContent = workstation ? workstation.label : "--";
 }
 
 /* ---- Picker screen ---- */
@@ -484,68 +594,157 @@ document.getElementById("startShiftBtn").addEventListener("click", () => {
   goToList(selectedOperatorId);
 });
 
-/* ---- Task list screen ---- */
+/* ---- Jobs list screen ---- */
 function goToList(operatorId) {
   currentListOperatorId = operatorId;
+  searchTerm = "";
+  document.getElementById("jobSearchInput").value = "";
   showScreen("list");
-  renderHeaderContext();
-  renderTaskList();
+  renderListHeader();
+  renderJobList();
+}
+function renderListHeader() {
+  const operator = findOperator(currentListOperatorId);
+  const workstation = findWorkstation(getCurrentWorkstationId());
+  document.getElementById("operatorLabel").textContent = operator ? operator.name : "--";
+  document.getElementById("workstationLabel").textContent = workstation ? workstation.label : "--";
 }
 function statusLabel(status) { return status.replace("-", " ").toUpperCase(); }
-function renderTaskList() {
-  const tasks = getTasksForOperator(currentListOperatorId);
-  const container = document.getElementById("taskRowList");
+function matchesSearch(job) {
+  if (!searchTerm) return true;
+  const haystack = `${job.name} ${job.workOrderNo} ${job.productName}`.toLowerCase();
+  return haystack.includes(searchTerm.toLowerCase());
+}
+function renderJobList() {
+  const allJobs = getJobsForOperator(currentListOperatorId);
+  const jobs = allJobs.filter(matchesSearch);
+  const container = document.getElementById("jobRowList");
   container.innerHTML = "";
-  const completeCount = tasks.filter((t) => t.status === "complete").length;
-  document.getElementById("listSummary").textContent = `${completeCount} of ${tasks.length} complete`;
-  tasks.forEach((task) => {
-    const segment = findSegment(task.segmentId);
-    const elapsed = getElapsedSeconds(task);
+
+  const completeJobs = allJobs.filter((j) => getJobProgress(j.id).aggregateStatus === "complete").length;
+  let summaryText = `${completeJobs} of ${allJobs.length} jobs complete`;
+  if (searchTerm) summaryText += ` — showing ${jobs.length} match${jobs.length === 1 ? "" : "es"}`;
+  document.getElementById("listSummary").textContent = summaryText;
+
+  jobs.forEach((job) => {
+    const progress = getJobProgress(job.id);
     const row = document.createElement("button");
-    row.className = "task-row";
+    row.className = "job-row";
     row.innerHTML = `
-      <span class="task-row-number">${task.opNumber}</span>
-      <span class="task-row-info">
-        <span class="task-row-name">${task.name}</span>
-        <span class="task-row-sub">
-          <span>${task.category}</span>
-          ${segment ? `<span class="badge badge-segment">${segment.name}</span>` : ""}
-        </span>
+      <span class="job-row-info">
+        <span class="job-row-name">${job.name}</span>
+        <span class="job-row-sub"><span>${job.workOrderNo}</span><span>${job.productName}</span></span>
       </span>
-      <span class="badge badge-status ${task.status}">${statusLabel(task.status)}</span>
-      <span class="task-row-time"><strong>${formatHMS(elapsed)}</strong> / ${formatMS(task.targetSeconds)}</span>
+      <span class="job-row-progress">${progress.completeCount} of ${progress.total} operations complete</span>
+      <span class="badge badge-status ${progress.aggregateStatus}">${statusLabel(progress.aggregateStatus)}</span>
     `;
-    row.addEventListener("click", () => goToTask(task.id));
+    row.addEventListener("click", () => goToJob(job.id));
     container.appendChild(row);
   });
 }
+document.getElementById("jobSearchInput").addEventListener("input", (e) => {
+  searchTerm = e.target.value;
+  renderJobList();
+});
 document.getElementById("switchOperatorLink").addEventListener("click", () => {
   showScreen("picker");
   renderResumeBanner();
 });
 
-/* ---- Task detail screen ---- */
-function goToTask(taskId) {
-  currentTaskId = taskId;
-  setActiveTaskId(taskId);
-  showScreen("task");
-  renderHeaderContext();
-  renderTaskInfo();
-  renderControlBar();
+/* ---- Job workspace screen ---- */
+function goToJob(jobId) {
+  currentJobId = jobId;
+  setActiveJobId(jobId);
+  currentOperationId = pickInitialOperationId(jobId);
+  showScreen("job");
+  renderJobHeader();
+  renderOperationList();
+  renderMiddlePanel();
+  renderPartsPanel();
 }
-function renderTaskInfo() {
-  const task = getTaskById(currentTaskId);
-  const segment = findSegment(task.segmentId);
-  document.getElementById("detailOpNumber").textContent = `OP ${task.opNumber}`;
-  document.getElementById("detailName").textContent = task.name;
-  document.getElementById("detailCategory").textContent = task.category;
-  document.getElementById("detailDescription").textContent = task.description;
+function pickInitialOperationId(jobId) {
+  const operations = getOperationsForJob(jobId);
+  if (operations.length === 0) return null;
+  const restored = getActiveOperationIdForJob(jobId);
+  if (restored && operations.some((o) => o.id === restored)) return restored;
+  const inProgress = operations.find((o) => o.status === "in-progress");
+  if (inProgress) return inProgress.id;
+  const notComplete = operations.find((o) => o.status !== "complete");
+  if (notComplete) return notComplete.id;
+  return operations[0].id;
+}
+function renderJobHeader() {
+  const job = getJobById(currentJobId);
+  const operator = findOperator(job.operatorId);
+  const workstation = findWorkstation(job.workstationId);
+  document.getElementById("operatorLabel").textContent = operator ? operator.name : "--";
+  document.getElementById("workstationLabel").textContent = workstation ? workstation.label : "--";
+  document.getElementById("jobHeaderName").textContent = job.name;
+  document.getElementById("jobHeaderSub").textContent = `${job.workOrderNo} · ${job.productName}`;
+}
+function selectOperation(operationId) {
+  currentOperationId = operationId;
+  setActiveOperationIdForJob(currentJobId, operationId);
+  renderOperationList();
+  renderMiddlePanel();
+  renderPartsPanel();
+}
+function renderOperationList() {
+  const operations = getOperationsForJob(currentJobId);
+  const container = document.getElementById("operationRowList");
+  container.innerHTML = "";
+  operations.forEach((op) => {
+    const elapsed = getElapsedSeconds(op);
+    const row = document.createElement("button");
+    row.className = "operation-row" + (op.id === currentOperationId ? " selected" : "");
+    row.innerHTML = `
+      <span class="operation-row-number">${op.opNumber}</span>
+      <span class="operation-row-info">
+        <span class="operation-row-name">${op.name}</span>
+        <span class="badge badge-status ${op.status}">${statusLabel(op.status)}</span>
+      </span>
+      <span class="operation-row-time">${formatHMS(elapsed)} / ${formatMS(op.targetSeconds)}</span>
+    `;
+    row.addEventListener("click", () => selectOperation(op.id));
+    container.appendChild(row);
+  });
+}
+function renderMiddlePanel() {
+  const operation = getOperationById(currentOperationId);
+  if (!operation) return;
+  const segment = findSegment(operation.segmentId);
+  document.getElementById("detailOpNumber").textContent = `OP ${operation.opNumber}`;
+  document.getElementById("detailName").textContent = operation.name;
+  document.getElementById("detailCategory").textContent = operation.category;
+  document.getElementById("detailDescription").textContent = operation.description;
+
   const segmentEl = document.getElementById("detailSegment");
   if (segment) { segmentEl.textContent = segment.name; segmentEl.style.display = "inline-block"; }
   else { segmentEl.style.display = "none"; }
+
+  const elapsed = getElapsedSeconds(operation);
+  document.getElementById("stepLabel").textContent = `Step ${operation.opNumber}`;
+  document.getElementById("statusText").textContent = statusLabel(operation.status);
+  document.getElementById("statusDot").className = `status-dot ${operation.status}`;
+  document.getElementById("elapsedReadout").textContent = formatHMS(elapsed);
+  document.getElementById("targetReadout").textContent = formatMS(operation.targetSeconds);
+
+  const toggleBtn = document.getElementById("toggleBtn");
+  const completeBtn = document.getElementById("completeBtn");
+  if (operation.status === "complete") {
+    toggleBtn.textContent = "Start"; toggleBtn.className = "btn-toggle start"; toggleBtn.disabled = true; completeBtn.disabled = true;
+  } else if (operation.status === "in-progress") {
+    toggleBtn.textContent = "Pause"; toggleBtn.className = "btn-toggle pause"; toggleBtn.disabled = false; completeBtn.disabled = false;
+  } else {
+    toggleBtn.textContent = "Start"; toggleBtn.className = "btn-toggle start"; toggleBtn.disabled = false; completeBtn.disabled = false;
+  }
+}
+function renderPartsPanel() {
+  const operation = getOperationById(currentOperationId);
   const partsBody = document.getElementById("partsListBody");
   partsBody.innerHTML = "";
-  (task.parts || []).forEach((entry) => {
+  if (!operation) return;
+  (operation.parts || []).forEach((entry) => {
     const part = findPart(entry.partId);
     const row = document.createElement("div");
     row.className = "part-row";
@@ -553,37 +752,21 @@ function renderTaskInfo() {
     partsBody.appendChild(row);
   });
 }
-function renderControlBar() {
-  const task = getTaskById(currentTaskId);
-  if (!task) return;
-  const elapsed = getElapsedSeconds(task);
-  document.getElementById("stepLabel").textContent = `Step ${task.opNumber}`;
-  document.getElementById("statusText").textContent = task.status.replace("-", " ").toUpperCase();
-  document.getElementById("statusDot").className = `status-dot ${task.status}`;
-  document.getElementById("elapsedReadout").textContent = formatHMS(elapsed);
-  document.getElementById("targetReadout").textContent = formatMS(task.targetSeconds);
-  const toggleBtn = document.getElementById("toggleBtn");
-  const completeBtn = document.getElementById("completeBtn");
-  if (task.status === "complete") {
-    toggleBtn.textContent = "Start"; toggleBtn.className = "btn-toggle start"; toggleBtn.disabled = true; completeBtn.disabled = true;
-  } else if (task.status === "in-progress") {
-    toggleBtn.textContent = "Pause"; toggleBtn.className = "btn-toggle pause"; toggleBtn.disabled = false; completeBtn.disabled = false;
-  } else {
-    toggleBtn.textContent = "Start"; toggleBtn.className = "btn-toggle start"; toggleBtn.disabled = false; completeBtn.disabled = false;
-  }
-}
 document.getElementById("toggleBtn").addEventListener("click", () => {
-  let task = getTaskById(currentTaskId);
-  task = task.status === "in-progress" ? pauseTask(task) : startTask(task);
-  renderControlBar();
+  const operation = getOperationById(currentOperationId);
+  if (operation.status === "in-progress") pauseOperation(operation);
+  else startOperation(operation);
+  renderOperationList();
+  renderMiddlePanel();
 });
 document.getElementById("completeBtn").addEventListener("click", () => {
-  completeTask(getTaskById(currentTaskId));
-  renderControlBar();
+  completeOperation(getOperationById(currentOperationId));
+  renderOperationList();
+  renderMiddlePanel();
 });
 document.getElementById("backToListLink").addEventListener("click", () => {
-  const task = getTaskById(currentTaskId);
-  goToList(task ? task.operatorId : currentListOperatorId);
+  const job = getJobById(currentJobId);
+  goToList(job ? job.operatorId : currentListOperatorId);
 });
 
 /* ---------------------------------------------------------------------
@@ -597,8 +780,8 @@ renderClock();
 showScreen("picker");
 setInterval(() => {
   renderClock();
-  if (currentScreen === "list") renderTaskList();
-  if (currentScreen === "task") renderControlBar();
+  if (currentScreen === "list") renderJobList();
+  if (currentScreen === "job") { renderOperationList(); renderMiddlePanel(); }
 }, 1000);
 </script>
 </body>
