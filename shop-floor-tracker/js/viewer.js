@@ -107,16 +107,22 @@ const MODEL_TEMPLATES = {
     return group;
   },
   "flat-tag"() {
+    // Sized closer to the other templates' footprint (was 0.9x0.06x0.6 --
+    // thin AND small, which made it look like a barely-visible sliver even
+    // at the correct default camera framing) and tilted so it isn't viewed
+    // nearly edge-on by default.
     const group = new THREE.Group();
-    const tag = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.6), baseMaterial());
+    const tag = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.12, 0.9), baseMaterial());
     group.add(tag);
-    const grommet = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 16), darkMaterial());
+    const grommet = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.16, 16), darkMaterial());
     grommet.rotation.x = Math.PI / 2;
-    grommet.position.set(-0.35, 0, 0.22);
+    grommet.position.set(-0.5, 0, 0.32);
     group.add(grommet);
-    const label = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.02, 0.3), accentMaterial());
-    label.position.set(0.05, 0.04, 0);
+    const label = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.03, 0.45), accentMaterial());
+    label.position.set(0.08, 0.075, 0);
     group.add(label);
+    group.rotation.x = 0.2;
+    group.rotation.z = 0.12;
     return group;
   },
   "hinge-assembly"() {
@@ -257,13 +263,24 @@ function showModel(modelType, fileName) {
   currentGroup = buildModel(modelType);
   currentModelType = modelType;
   scene.add(currentGroup);
+
+  // Different templates have different footprints (e.g. flat-tag is much
+  // smaller than crate/bracket) — always reframe on an actual model swap so
+  // a shape never ends up too small/off-angle to see because of camera state
+  // left over from a differently-sized shape on a previous operation.
+  resetView();
 }
 
 function resetView() {
-  if (!camera || !controls) return;
-  camera.position.copy(defaultCameraPosition);
-  controls.target.copy(defaultTarget);
-  controls.update();
+  if (!controls) return;
+  // OrbitControls tracks its own internal spherical/zoom state separately
+  // from camera.position; controls.reset() clears that internal state too
+  // (restoring position0/target0/zoom0 captured at construction time).
+  // Directly assigning camera.position/controls.target here is not enough —
+  // the very next damped controls.update() in the render loop would
+  // immediately re-derive camera.position from the stale internal state
+  // and undo the manual reset.
+  controls.reset();
 }
 
 window.PartViewer = {
