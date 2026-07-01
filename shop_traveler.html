@@ -1508,6 +1508,54 @@
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+
+    // ── Purchase items CSV (auto-exported alongside main CSV if any exist) ──
+    const purchaseItems = [];
+    // Packet mode: BOM items with type === 'purchase'
+    if (activeMode === 'packet') {
+      allItems.filter(i => i.type === 'purchase').forEach(i => {
+        purchaseItems.push({
+          _partNumber:   i.parentPartNumber || '',
+          itemNumber:    '',
+          description:   i.partName        || '',
+          catalogNumber: i.catalogNumber   || '',
+          vendor:        i.vendor          || '',
+          quantity:      i.qtyRequired != null ? String(i.qtyRequired) : '',
+        });
+      });
+    }
+    // All modes: purchaseItems arrays on each traveler (hardware lists from drawings)
+    travelers.forEach(d => {
+      (d.purchaseItems || []).forEach(item => {
+        purchaseItems.push({
+          _partNumber:   d.partNumber          || '',
+          itemNumber:    item.itemNumber        || '',
+          description:   item.description      || '',
+          catalogNumber: item.catalogNumber     || '',
+          vendor:        item.vendor            || '',
+          quantity:      item.quantity != null ? String(item.quantity) : '',
+        });
+      });
+    });
+
+    if (purchaseItems.length) {
+      const piHeader = ['PART_NUMBER','ITEM_NUMBER','DESCRIPTION','CATALOG_NUMBER','VENDOR','QUANTITY'].join(',');
+      const piRows   = purchaseItems.map(item => [
+        csvCell(item._partNumber),
+        csvCell(item.itemNumber),
+        csvCell(item.description),
+        csvCell(item.catalogNumber),
+        csvCell(item.vendor),
+        csvCell(item.quantity),
+      ].join(','));
+      const piBlob = new Blob([[piHeader, ...piRows].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const piUrl  = URL.createObjectURL(piBlob);
+      const piA    = document.createElement('a');
+      piA.href     = piUrl;
+      piA.download = 'purchase_items.csv';
+      piA.click();
+      URL.revokeObjectURL(piUrl);
+    }
   }
 
   // ── Config: Operation Types ──────────────────────────────────────────────
@@ -1628,6 +1676,10 @@ Outside processing fields (operation level — set only on OUTSIDE PROC operatio
 - milSpec: military/government spec for that finish (e.g. "MIL-DTL-13924", "MIL-A-8625 Type III") — "" on all other ops
 - additionalSpecOptions: extra options/classes for that finish (e.g. "Class 1", "Class 4") — "" on all other ops
 
+Purchase items (part level — scan for any parts list, hardware table, or bought-item BOM on this drawing):
+- purchaseItems: array of non-manufactured items called out on the drawing; use [] if none found
+  Each entry: { "itemNumber": "1", "description": "Socket Hd Cap Screw M6×12", "catalogNumber": "92290A139", "vendor": "McMaster-Carr", "quantity": 4 }
+
 Return ONLY valid JSON — no markdown, no explanation:
 
 {
@@ -1638,6 +1690,7 @@ Return ONLY valid JSON — no markdown, no explanation:
   "materialGrade": "",
   "materialStandard": "",
   "approvedPrint": "",
+  "purchaseItems": [],
   "operations": [
     {
       "opNumber": "10",
@@ -1763,6 +1816,8 @@ Return ONLY valid JSON:
       "materialGrade": "",
       "materialStandard": "",
       "approvedPrint": "",
+      "vendor": "",
+      "catalogNumber": "",
       "operations": [
         { "opNumber": "10", "brief": "Program, model part", "description": "Part Programming / Modeling – create CNC programs and setup sheets", "resource": "CNC LATHE", "notes": "", "outsideProcessingType": "", "milSpec": "", "additionalSpecOptions": "" }
       ]
@@ -1778,6 +1833,7 @@ Rules:
 - materialGrade: grade/temper/condition if specified (e.g. "4140", "T6", "Annealed") — "" if not called out
 - materialStandard: governing spec if shown (e.g. "AMS 6349", "ASTM B209", "MIL-S-5626") — "" if not shown
 - outsideProcessingType / milSpec / additionalSpecOptions: set on OUTSIDE PROC operations only — the finish type, mil spec, and extra options for that specific op; use "" on all other ops
+- For purchase-type items: populate vendor (supplier/manufacturer from BOM table) and catalogNumber (vendor part number from BOM table); set operations: []
 - Return raw JSON only, no code fences`;
 
     const content = [
