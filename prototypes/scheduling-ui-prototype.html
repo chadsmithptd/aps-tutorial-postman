@@ -6,6 +6,9 @@
     - Everything is in-memory. Refreshing the page resets all state.
     - The "floor activity" feed is a simulated/mocked event generator, not real
       speech-to-text. Voice summaries are represented as pre-written text templates.
+    - Backward scheduling is per-job, infinite-capacity: each job's routing steps get
+      target dates counting back from its own due date. Cross-job machine contention
+      is flagged as a warning only — nothing is auto-rescheduled to resolve it.
     - No backend, no persistence, no auth.
 
   Open this file directly in a browser (double-click / file://) — no build step,
@@ -68,6 +71,15 @@
     background:var(--panel-2);border:1px solid var(--border);color:var(--muted);font-size:11px;
   }
 
+  /* ---------- tab bar ---------- */
+  nav.tabbar{display:flex;gap:4px;padding:8px 16px 0;background:var(--bg);flex-shrink:0;}
+  .tab-btn{
+    background:transparent;border:1px solid transparent;border-bottom:none;color:var(--muted);
+    padding:8px 14px;border-radius:6px 6px 0 0;font-size:12px;cursor:pointer;
+  }
+  .tab-btn.active{background:var(--panel);color:var(--text);border-color:var(--border);}
+  .hidden{display:none !important;}
+
   /* ---------- board layout ---------- */
   .board{
     flex:1;display:grid;grid-template-columns:1fr 340px;gap:12px;
@@ -85,6 +97,7 @@
   }
   .panel-header .title{color:var(--text);font-weight:600;letter-spacing:.02em;}
   .panel-header .toggle{margin-left:auto;cursor:pointer;user-select:none;color:var(--muted);}
+  .panel-header .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
   #queuePanel{flex:1 1 60%;min-height:0;}
   #blockedPanel{flex:0 0 auto;max-height:38%;}
@@ -100,7 +113,7 @@
   }
   .card-list.dragging-over{background:rgba(88,166,255,.08);outline:1px dashed var(--accent);outline-offset:-4px;}
 
-  /* ---------- job card ---------- */
+  /* ---------- job card / op row (shared) ---------- */
   .job-card{
     background:var(--panel-2);border:1px solid var(--border);border-radius:6px;
     padding:8px 10px;cursor:grab;position:relative;
@@ -116,7 +129,8 @@
   }
   .card-main{flex:1;min-width:0;}
   .card-title{font-weight:600;font-size:12.5px;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}
-  .card-title .jid{color:var(--accent);font-weight:700;}
+  .card-title .jid{color:var(--accent);font-weight:700;cursor:pointer;}
+  .card-title .jid:hover{text-decoration:underline;}
   .card-sub{color:var(--muted);font-size:11px;margin-top:1px;}
   .rec-diff{font-size:10px;color:var(--warning);margin-left:auto;flex-shrink:0;white-space:nowrap;}
   .info-btn{
@@ -138,6 +152,7 @@
   }
   .badge .dot{width:6px;height:6px;border-radius:50%;}
   .badge.risk{color:var(--warning);border-color:var(--warning);}
+  .badge.late{color:var(--danger);border-color:var(--danger);}
   .badge.blocked-reason{color:var(--danger);border-color:var(--danger);}
 
   .breakdown{
@@ -145,8 +160,8 @@
     font-size:11px;color:var(--muted);
   }
   .breakdown.show{display:block;}
-  .breakdown div{display:flex;justify-content:space-between;padding:1px 0;}
-  .breakdown b{color:var(--text);}
+  .breakdown div{display:flex;justify-content:space-between;padding:1px 0;gap:12px;}
+  .breakdown b{color:var(--text);text-align:right;}
 
   .blocked-card-actions{margin-top:6px;display:flex;justify-content:flex-end;}
   .blocked-card-actions button{font-size:11px;padding:4px 8px;}
@@ -169,6 +184,7 @@
   .feed-entry.cat-machine{border-left-color:var(--danger);}
   .feed-entry.cat-speedup{border-left-color:var(--success);}
   .feed-entry.cat-info{border-left-color:var(--accent);}
+  .feed-entry.cat-pullforward{border-left-color:var(--accent);}
   .feed-meta{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:10px;margin-bottom:3px;}
   .feed-cat{
     text-transform:uppercase;letter-spacing:.04em;font-weight:700;font-size:9.5px;
@@ -178,6 +194,7 @@
   .feed-entry.cat-machine .feed-cat{color:var(--danger);}
   .feed-entry.cat-speedup .feed-cat{color:var(--success);}
   .feed-entry.cat-info .feed-cat{color:var(--accent);}
+  .feed-entry.cat-pullforward .feed-cat{color:var(--accent);}
   .job-pill{
     color:var(--accent);cursor:pointer;text-decoration:underline dotted;font-weight:600;
   }
@@ -198,6 +215,16 @@
   }
   .chip .dot{width:6px;height:6px;border-radius:50%;}
 
+  /* ---------- routing / operations tab ---------- */
+  .routing-view{flex:1;display:flex;padding:12px;overflow:hidden;min-height:0;}
+  .resource-board{flex:1;display:flex;gap:12px;overflow-x:auto;min-height:0;}
+  .resource-col{flex:0 0 260px;min-height:0;}
+  .running-row{
+    padding:6px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--muted);
+    display:flex;flex-wrap:wrap;gap:4px;flex-shrink:0;
+  }
+  .running-empty{color:var(--muted);}
+
   /* ---------- modal ---------- */
   .modal-overlay{
     position:fixed;inset:0;background:rgba(1,4,9,.6);display:flex;align-items:center;
@@ -212,6 +239,29 @@
   .modal-options{display:flex;flex-direction:column;gap:6px;}
   .modal-options button{text-align:left;padding:8px 10px;}
   .modal-cancel{margin-top:12px;width:100%;}
+
+  .modal-box.wide{width:min(760px,92vw);max-height:82vh;display:flex;flex-direction:column;}
+  .routing-modal-header p{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .routing-toolbar{display:flex;gap:8px;margin-bottom:10px;flex-shrink:0;}
+  .routing-toolbar input,.routing-toolbar select{
+    background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:6px;
+    padding:6px 8px;font-size:12px;
+  }
+  .routing-toolbar input{flex:1;}
+  .routing-table-wrap{flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;}
+  .routing-table{width:100%;border-collapse:collapse;font-size:11.5px;}
+  .routing-table thead th{
+    position:sticky;top:0;background:var(--panel-2);text-align:left;padding:6px 8px;
+    border-bottom:1px solid var(--border);color:var(--muted);font-weight:600;
+  }
+  .routing-table td{padding:5px 8px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .routing-table tr.contention{background:rgba(248,81,73,.08);}
+  .empty-row{text-align:center;color:var(--muted);padding:16px;}
+  .status-badge-done{color:var(--success);border-color:var(--success);}
+  .status-badge-in-progress{color:var(--accent);border-color:var(--accent);}
+  .status-badge-ready{color:var(--text);}
+  .status-badge-blocked{color:var(--danger);border-color:var(--danger);}
+  .status-badge-pending{color:var(--muted);}
 
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
@@ -230,7 +280,12 @@
     <button id="resetBtn" title="Discard manual reordering and re-sort by computed priority">Reset to recommended</button>
   </header>
 
-  <main class="board">
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="priority">Priority Queue</button>
+    <button class="tab-btn" data-tab="routing">Routing / Operations</button>
+  </nav>
+
+  <main class="board" id="priorityView">
     <div class="queue-col">
       <section class="panel" id="queuePanel">
         <div class="panel-header">
@@ -256,6 +311,10 @@
       </div>
       <div class="feed-list" id="feedList"></div>
     </aside>
+  </main>
+
+  <main class="routing-view hidden" id="routingView">
+    <div class="resource-board" id="resourceBoard"></div>
   </main>
 
   <footer class="status-strip">
@@ -285,6 +344,11 @@
     {id:"m3", name:"CNC-03", status:"idle", downUntil:null},
     {id:"m4", name:"Mill-01", status:"running", downUntil:null},
     {id:"m5", name:"Lathe-02", status:"idle", downUntil:null},
+    {id:"m6", name:"Saw-01", status:"running", downUntil:null},
+    {id:"m7", name:"Deburr-01", status:"idle", downUntil:null},
+    {id:"m8", name:"Assembly-01", status:"running", downUntil:null},
+    {id:"m9", name:"Inspection-01", status:"idle", downUntil:null},
+    {id:"m10", name:"Outside-Plating", status:"running", downUntil:null},
   ];
   const EMPLOYEES = [
     {id:"e1", name:"T. Alvarez", status:"on-shift"},
@@ -301,51 +365,206 @@
   function rand(min,max){ return min + Math.random()*(max-min); }
   function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
-  const JOB_COUNT = 18;
+  // Operation-type templates: which work centers can run each op type, and how
+  // long each op typically takes. Used to build plausible shape->finish->ship
+  // routings rather than random noise.
+  const OP_TEMPLATES = {
+    "Saw":             { pool:["m6"],                  range:[0.25, 1.5] },
+    "CNC Mill":        { pool:["m1","m2","m3","m4"],   range:[0.5, 6] },
+    "CNC Lathe":       { pool:["m5"],                  range:[0.5, 4] },
+    "Deburr":          { pool:["m7"],                  range:[0.2, 1] },
+    "Assembly":        { pool:["m8"],                  range:[0.5, 8] },
+    "Packaging":       { pool:["m8"],                  range:[0.25, 1] },
+    "Inspection":      { pool:["m9"],                  range:[0.2, 0.75] },
+    "Outside Plating": { pool:["m10"],                 range:[24, 96] },
+  };
+  const EARLY_OPS = ["Saw","CNC Mill","CNC Lathe"];
+  const MID_OPS = ["Deburr","Assembly","Outside Plating"];
+  const LATE_OPS = ["Inspection","Packaging"];
+
+  function pickOpType(frac){
+    let pool;
+    if(frac < 0.35) pool = EARLY_OPS.concat(Math.random()<0.2 ? MID_OPS : []);
+    else if(frac < 0.8) pool = MID_OPS.concat(Math.random()<0.3 ? EARLY_OPS : [], Math.random()<0.2 ? LATE_OPS : []);
+    else pool = LATE_OPS.concat(Math.random()<0.15 ? MID_OPS : []);
+    return pick(pool);
+  }
+
+  function pickRoutingLength(){
+    const r = Math.random();
+    if(r < 0.65) return Math.floor(rand(3,15));     // 65%: short
+    if(r < 0.92) return Math.floor(rand(15,45));     // 27%: medium
+    if(r < 0.98) return Math.floor(rand(45,90));     // 6%: long
+    return Math.floor(rand(90,160));                 // 2%: very long (the "hundreds" outliers)
+  }
+
+  function buildRouting(jobId, length){
+    const steps = [];
+    for(let i=0;i<length;i++){
+      const frac = length<=1 ? 0 : i/(length-1);
+      const opType = pickOpType(frac);
+      const tmpl = OP_TEMPLATES[opType];
+      steps.push({
+        id: `${jobId}-${String(i+1).padStart(3,"0")}`,
+        jobId, seq: i+1,
+        opType, name: `${opType} — Op ${i+1}`,
+        workCenter: pick(tmpl.pool),
+        durationHours: rand(tmpl.range[0], tmpl.range[1]),
+        status: "pending", blockedReason: null, contentionWarning:false,
+        backwardStart: null, backwardFinish: null,
+        actualStart: null, actualFinish: null,
+        employee: null,
+      });
+    }
+    return steps;
+  }
+
+  // Seed plausible in-flight progress so jobs don't all start at 0% on load:
+  // pick a random "progress point", mark everything before it done (with
+  // backdated actual timestamps), the step at that point ready/in-progress,
+  // and leave the rest pending.
+  function seedProgressState(steps){
+    const progressPoint = Math.floor(rand(0, steps.length));
+    let cursor = new Date(Date.now() - rand(6,240)*3600000);
+    for(let i=0;i<progressPoint;i++){
+      const op = steps[i];
+      op.status = "done";
+      op.actualStart = new Date(cursor);
+      cursor = new Date(cursor.getTime() + op.durationHours*3600000);
+      op.actualFinish = new Date(cursor);
+      op.employee = pick(EMPLOYEES).id;
+    }
+    const current = steps[progressPoint];
+    if(current){
+      if(Math.random() < 0.3){
+        current.status = "in-progress";
+        current.actualStart = new Date(cursor);
+        current.employee = pick(EMPLOYEES).id;
+      } else {
+        current.status = "ready";
+      }
+    }
+  }
+
+  const JOB_COUNT = 90;
   const jobs = [];
   for(let i=0;i<JOB_COUNT;i++){
-    const id = "J-" + (4100 + i*17 + Math.floor(rand(0,9)));
-    const dueInHours = rand(-12, 14*24); // some already overdue, out to ~2 weeks
-    const estRemainingHours = rand(1, 36);
-    const materialRisk = Math.random() < 0.15;
+    const id = "J-" + (4100 + i*7);
+    const routing = buildRouting(id, pickRoutingLength());
+    seedProgressState(routing);
+    const totalRemainingHours = routing.filter(s=>s.status!=="done").reduce((sum,s)=>sum+s.durationHours,0);
+    const dueDate = new Date(Date.now() + totalRemainingHours*rand(0.5,1.6)*3600000 + rand(-24,24)*3600000);
+    const materialRisk = Math.random() < 0.12;
     jobs.push({
       id, part: PARTS[i % PARTS.length], customer: pick(CUSTOMERS),
       qty: Math.floor(rand(4,120)),
-      dueDate: new Date(Date.now() + dueInHours*3600000),
-      estRemainingHours,
-      machine: pick(MACHINES).id,
-      employee: pick(EMPLOYEES).id,
-      status: "queued",
+      dueDate, routing,
       materialRisk, materialRiskNote: materialRisk ? "Vendor confirmed tight ETA on raw stock." : null,
       blocked:false, blockedReason:null, blockedAt:null,
       computedRank:null, scoreBreakdown:null,
+      currentOp:null, percentComplete:0, atRiskFlag:"on-track", projectedFinish:null,
+      estRemainingHours: totalRemainingHours,
       history:[]
     });
   }
   const jobsById = Object.fromEntries(jobs.map(j=>[j.id,j]));
+  const opsById = {};
+  jobs.forEach(job => job.routing.forEach(op => { opsById[op.id] = op; }));
 
   /* =========================================================
      STATE
   ========================================================= */
   const state = {
-    manualOrder: [],   // order of active (non-blocked) queue, source of truth for display
+    manualOrder: [],    // order of active (non-blocked) queue, source of truth for display
     blockedOrder: [],
+    resourceOrder: {},  // one array of ready-op ids per machine id, source of truth for the Routing tab
     openBreakdowns: new Set(),
     draggedId: null,
     feed: [],
+    activeTab: "priority",
   };
 
   /* =========================================================
-     SCORING
+     SCORING & SCHEDULING
   ========================================================= */
   function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
   function hoursUntil(date){ return (date.getTime() - Date.now()) / 3600000; }
 
+  // Per-job, infinite-capacity backward pass: walk the routing in reverse from
+  // the due date so each step gets a target start/finish. Completed steps
+  // anchor the cursor (via their actual finish) but never get their historical
+  // targets rewritten.
+  function backwardScheduleJob(job){
+    let cursor = job.dueDate;
+    for(let i=job.routing.length-1;i>=0;i--){
+      const op = job.routing[i];
+      if(op.status === "done"){
+        cursor = op.actualFinish || op.backwardFinish || cursor;
+        continue;
+      }
+      op.backwardFinish = cursor;
+      op.backwardStart = new Date(cursor.getTime() - op.durationHours*3600000);
+      cursor = op.backwardStart;
+    }
+  }
+
+  function recomputeReadiness(){
+    jobs.forEach(job=>{
+      job.routing.forEach((op,i)=>{
+        if(op.status !== "pending") return;
+        const prev = job.routing[i-1];
+        if(i===0 || (prev && prev.status==="done")) op.status = "ready";
+      });
+    });
+  }
+
+  // Display-only warning: flags operations whose backward-computed windows
+  // overlap another operation competing for the same machine. Never auto-resolved.
+  function flagContention(){
+    const byMachine = {};
+    jobs.forEach(job=>job.routing.forEach(op=>{
+      op.contentionWarning = false;
+      if(op.status === "done") return;
+      (byMachine[op.workCenter] ||= []).push(op);
+    }));
+    Object.values(byMachine).forEach(list=>{
+      list.sort((a,b)=> a.backwardStart - b.backwardStart);
+      for(let i=0;i<list.length-1;i++){
+        if(list[i].backwardFinish > list[i+1].backwardStart){
+          list[i].contentionWarning = true;
+          list[i+1].contentionWarning = true;
+        }
+      }
+    });
+  }
+
+  // "Behind pace" signal: how far in the past (negative) or future (positive)
+  // is the required start of the next incomplete step, per its own backward schedule.
+  function computeSlackHours(job){
+    const nextOp = job.routing.find(op=>op.status!=="done");
+    if(!nextOp) return hoursUntil(job.dueDate);
+    return hoursUntil(nextOp.backwardStart);
+  }
+
+  function recomputeJobAggregates(job){
+    const routing = job.routing;
+    job.currentOp = routing.find(op=>op.status==="ready"||op.status==="in-progress") || null;
+    const doneHours = routing.filter(op=>op.status==="done").reduce((s,op)=>s+op.durationHours,0);
+    const totalHours = routing.reduce((s,op)=>s+op.durationHours,0);
+    job.percentComplete = totalHours>0 ? clamp((doneHours/totalHours)*100,0,100) : 0;
+    job.estRemainingHours = totalHours - doneHours;
+    const lastOp = routing[routing.length-1];
+    job.projectedFinish = lastOp ? lastOp.backwardFinish : job.dueDate;
+    const paceSlip = computeSlackHours(job);
+    job.atRiskFlag = paceSlip >= 0 ? "on-track" : (paceSlip > -8 ? "at-risk" : "late");
+  }
+
   function computeScore(job){
-    const machine = machinesById[job.machine];
-    const employee = employeesById[job.employee];
+    const op = job.currentOp;
+    const machine = op ? machinesById[op.workCenter] : null;
+    const employee = (op && op.employee) ? employeesById[op.employee] : null;
     const dueInHours = hoursUntil(job.dueDate);
-    const slackHours = dueInHours - job.estRemainingHours;
+    const slackHours = computeSlackHours(job);
     const urgencyScore = clamp(100 - (slackHours/240)*100, 0, 100);
 
     let machinePenalty = 0;
@@ -368,6 +587,10 @@
   }
 
   function recomputeAll(){
+    recomputeReadiness();
+    jobs.forEach(backwardScheduleJob);
+    flagContention();
+    jobs.forEach(recomputeJobAggregates);
     jobs.forEach(j => j.scoreBreakdown = computeScore(j));
     const active = jobs.filter(j=>!j.blocked)
       .slice()
@@ -390,9 +613,13 @@
     if(h < 24) return `Due today, ${abs}`;
     return `Due ${abs} (${Math.round(h/24)}d)`;
   }
+  function fmtDateTime(date){
+    if(!date) return "—";
+    return date.toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+  }
 
   /* =========================================================
-     RENDERING
+     RENDERING — Priority Queue tab
   ========================================================= */
   const queueListEl = document.getElementById("queueList");
   const blockedListEl = document.getElementById("blockedList");
@@ -401,21 +628,22 @@
   function cardInnerHTML(job, displayRank){
     const sb = job.scoreBreakdown;
     const color = urgencyColor(sb.finalScore);
-    const machine = machinesById[job.machine];
-    const employee = employeesById[job.employee];
+    const op = job.currentOp;
+    const machine = op ? machinesById[op.workCenter] : null;
+    const employee = (op && op.employee) ? employeesById[op.employee] : null;
     const recDiff = (!job.blocked && displayRank !== job.computedRank)
       ? `<span class="rec-diff">recommended #${job.computedRank}</span>` : "";
 
-    let badges = `
-      <span class="badge"><span class="dot status-${machine.status}"></span>${machine.name}</span>
-      <span class="badge"><span class="dot status-${employee.status.replace(" ","-")}"></span>${employee.name}</span>
-    `;
-    if(job.materialRisk && !job.blocked){
-      badges += `<span class="badge risk">⚠ material risk</span>`;
-    }
-    if(job.blocked){
-      badges += `<span class="badge blocked-reason">${job.blockedReason}</span>`;
-    }
+    let badges = "";
+    if(machine) badges += `<span class="badge"><span class="dot status-${machine.status}"></span>${machine.name}</span>`;
+    if(employee) badges += `<span class="badge"><span class="dot status-${employee.status}"></span>${employee.name}</span>`;
+    if(op) badges += `<span class="badge">Op ${op.seq}/${job.routing.length} · ${op.opType}</span>`;
+    if(job.materialRisk && !job.blocked) badges += `<span class="badge risk">⚠ material risk</span>`;
+    if(job.blocked) badges += `<span class="badge blocked-reason">${job.blockedReason}</span>`;
+
+    let riskLabel = "";
+    if(job.atRiskFlag === "late") riskLabel = `<span class="badge late">⚠ behind pace</span>`;
+    else if(job.atRiskFlag === "at-risk") riskLabel = `<span class="badge risk">⚠ at risk</span>`;
 
     const blockedActions = job.blocked
       ? `<div class="blocked-card-actions"><button data-action="unblock" data-job="${job.id}">Return to queue</button></div>`
@@ -425,8 +653,8 @@
       <div class="card-top">
         <div class="rank-badge">${displayRank}</div>
         <div class="card-main">
-          <div class="card-title"><span class="jid">${job.id}</span>${job.part}${recDiff}</div>
-          <div class="card-sub">${job.customer} · qty ${job.qty}</div>
+          <div class="card-title"><span class="jid" data-action="open-routing" data-job="${job.id}">${job.id}</span>${job.part}${recDiff}</div>
+          <div class="card-sub">${job.customer} · qty ${job.qty} · ${job.percentComplete.toFixed(0)}% complete</div>
         </div>
         <button class="info-btn" data-action="toggle-info" data-job="${job.id}" title="Show score breakdown">i</button>
       </div>
@@ -434,24 +662,28 @@
         <div class="urgency-track"><div class="urgency-fill" style="width:${sb.finalScore}%;background:${color}"></div></div>
         <div class="due-label">${fmtDue(job.dueDate)}</div>
       </div>
-      <div class="badge-row">${badges}</div>
+      <div class="badge-row">${badges}${riskLabel}</div>
       ${blockedActions}
       <div class="breakdown${state.openBreakdowns.has(job.id) ? " show":""}">
         <div><span>Days to due</span><b>${sb.daysToDue.toFixed(1)}</b></div>
-        <div><span>Slack hours</span><b>${sb.slackHours.toFixed(1)}</b></div>
+        <div><span>Pace slack (h)</span><b>${sb.slackHours.toFixed(1)}</b></div>
         <div><span>Urgency score</span><b>${sb.urgencyScore.toFixed(0)}</b></div>
         <div><span>Machine penalty</span><b>+${sb.machinePenalty}</b></div>
         <div><span>Labor penalty</span><b>+${sb.laborPenalty}</b></div>
         <div><span>Material penalty</span><b>+${sb.materialPenalty}</b></div>
         <div><span>Final score</span><b>${sb.finalScore.toFixed(0)}</b></div>
+        <div><span>Current step</span><b>${op ? `Op ${op.seq} — ${op.opType}` : "—"}</b></div>
+        <div><span>Routing length</span><b>${job.routing.length} steps</b></div>
+        <div><span>Projected finish</span><b>${fmtDateTime(job.projectedFinish)}</b></div>
       </div>
     `;
   }
 
   function makeCardEl(job, displayRank){
     const el = document.createElement("div");
-    el.className = "job-card";
+    el.className = "job-card drag-item";
     el.draggable = true;
+    el.dataset.dragId = job.id;
     el.dataset.jobId = job.id;
     el.innerHTML = cardInnerHTML(job, displayRank);
     el.addEventListener("dragstart", onCardDragStart);
@@ -490,7 +722,7 @@
     ).join(" ");
     const employeeStrip = document.getElementById("employeeStrip");
     employeeStrip.innerHTML = EMPLOYEES.map(e =>
-      `<span class="chip"><span class="dot status-${e.status.replace(" ","-")}"></span>${e.name} — ${e.status}</span>`
+      `<span class="chip"><span class="dot status-${e.status}"></span>${e.name} — ${e.status}</span>`
     ).join(" ");
   }
 
@@ -501,19 +733,153 @@
       .map(j=>j.id);
   }
 
+  /* =========================================================
+     RENDERING — Routing / Operations tab
+  ========================================================= */
+  function initResourceOrder(){
+    MACHINES.forEach(m => { state.resourceOrder[m.id] = []; });
+    jobs.forEach(job=>{
+      const op = job.currentOp;
+      if(job.blocked || !op || op.status !== "ready") return;
+      state.resourceOrder[op.workCenter].push(op.id);
+    });
+    Object.keys(state.resourceOrder).forEach(mid=>{
+      state.resourceOrder[mid].sort((a,b)=> opsById[a].backwardStart - opsById[b].backwardStart);
+    });
+  }
+
+  function removeJobOpFromResourceOrder(job){
+    const op = job.currentOp;
+    if(!op) return;
+    const arr = state.resourceOrder[op.workCenter];
+    if(!arr) return;
+    const i = arr.indexOf(op.id);
+    if(i > -1) arr.splice(i,1);
+  }
+
+  function addJobOpToResourceOrder(job){
+    const op = job.currentOp;
+    if(!op || op.status !== "ready") return;
+    const arr = state.resourceOrder[op.workCenter];
+    if(!arr || arr.includes(op.id)) return;
+    let idx = arr.findIndex(id => opsById[id].backwardStart > op.backwardStart);
+    if(idx === -1) idx = arr.length;
+    arr.splice(idx, 0, op.id);
+  }
+
+  function buildResourceBoardSkeleton(){
+    const board = document.getElementById("resourceBoard");
+    MACHINES.forEach(m=>{
+      const col = document.createElement("section");
+      col.className = "panel resource-col";
+      col.innerHTML = `
+        <div class="panel-header">
+          <span class="dot status-${m.status}" id="resDot-${m.id}"></span>
+          <span class="title">${m.name}</span>
+          <span class="count-badge" id="resCount-${m.id}">0</span>
+        </div>
+        <div class="running-row" id="running-${m.id}"></div>
+        <div class="card-list op-list" id="opList-${m.id}" data-empty-label="No ready operations"></div>
+      `;
+      board.appendChild(col);
+      const listEl = col.querySelector(".op-list");
+      wireDropZone(listEl, () => {
+        state.resourceOrder[m.id] = [...listEl.querySelectorAll(".drag-item")].map(el=>el.dataset.dragId);
+      });
+    });
+  }
+
+  function opRowInnerHTML(op, displayIdx, recommendedRank){
+    const job = jobsById[op.jobId];
+    const recDiff = (recommendedRank !== displayIdx)
+      ? `<span class="rec-diff">recommended #${recommendedRank}</span>` : "";
+    const contention = op.contentionWarning ? `<span class="badge risk">⚠ contention</span>` : "";
+    return `
+      <div class="card-top">
+        <div class="rank-badge">${displayIdx}</div>
+        <div class="card-main">
+          <div class="card-title"><span class="jid" data-action="open-routing" data-job="${job.id}">${job.id}</span>${op.opType} · Op ${op.seq}/${job.routing.length}${recDiff}</div>
+          <div class="card-sub">${job.part} · ${op.durationHours.toFixed(1)}h</div>
+        </div>
+      </div>
+      <div class="urgency-row">
+        <div class="due-label">Target start ${fmtDateTime(op.backwardStart)}</div>
+      </div>
+      <div class="badge-row">${contention}</div>
+    `;
+  }
+
+  function makeOpRowEl(op, displayIdx, recommendedRank){
+    const el = document.createElement("div");
+    el.className = "job-card drag-item op-row";
+    el.draggable = true;
+    el.dataset.dragId = op.id;
+    el.dataset.opId = op.id;
+    el.dataset.jobId = op.jobId;
+    el.innerHTML = opRowInnerHTML(op, displayIdx, recommendedRank);
+    el.addEventListener("dragstart", onCardDragStart);
+    el.addEventListener("dragend", onCardDragEnd);
+    return el;
+  }
+
+  function renderResourceBoard(){
+    MACHINES.forEach(m=>{
+      const runningJobs = jobs.filter(j=>!j.blocked && j.currentOp && j.currentOp.status==="in-progress" && j.currentOp.workCenter===m.id);
+      const runningRowEl = document.getElementById(`running-${m.id}`);
+      if(runningRowEl){
+        runningRowEl.innerHTML = runningJobs.length
+          ? runningJobs.map(j=>`<span class="chip"><span class="dot status-running"></span>${j.id} · Op ${j.currentOp.seq}</span>`).join("")
+          : `<span class="running-empty">Idle</span>`;
+      }
+      const listEl = document.getElementById(`opList-${m.id}`);
+      if(!listEl) return;
+      listEl.innerHTML = "";
+      const ids = state.resourceOrder[m.id] || [];
+      const recRank = {};
+      ids.slice().sort((a,b)=>opsById[a].backwardStart-opsById[b].backwardStart).forEach((id,i)=>{ recRank[id] = i+1; });
+      ids.forEach((opId, idx) => {
+        const op = opsById[opId];
+        if(!op) return;
+        listEl.appendChild(makeOpRowEl(op, idx+1, recRank[opId]));
+      });
+      listEl.classList.toggle("empty", ids.length===0);
+      const countEl = document.getElementById(`resCount-${m.id}`);
+      if(countEl) countEl.textContent = ids.length;
+      const dotEl = document.getElementById(`resDot-${m.id}`);
+      if(dotEl) dotEl.className = `dot status-${m.status}`;
+    });
+  }
+
   function renderAll(){
     recomputeAll();
     sortManualOrderByRecommended();
+    initResourceOrder();
     renderQueue();
     renderBlocked();
     renderStrips();
+    renderResourceBoard();
   }
+
+  /* =========================================================
+     TAB SWITCHING
+  ========================================================= */
+  function showTab(name){
+    state.activeTab = name;
+    document.getElementById("priorityView").classList.toggle("hidden", name !== "priority");
+    document.getElementById("routingView").classList.toggle("hidden", name !== "routing");
+    document.querySelectorAll(".tab-btn").forEach(btn=>{
+      btn.classList.toggle("active", btn.dataset.tab === name);
+    });
+  }
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", () => showTab(btn.dataset.tab));
+  });
 
   /* =========================================================
      DRAG AND DROP (native HTML5 DnD, no external libraries)
   ========================================================= */
   function onCardDragStart(e){
-    state.draggedId = e.currentTarget.dataset.jobId;
+    state.draggedId = e.currentTarget.dataset.dragId;
     e.currentTarget.classList.add("dragging");
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", state.draggedId);
@@ -523,7 +889,7 @@
   }
 
   function getDragAfterElement(container, y){
-    const els = [...container.querySelectorAll(".job-card:not(.dragging)")];
+    const els = [...container.querySelectorAll(".drag-item:not(.dragging)")];
     return els.reduce((closest, child) => {
       const box = child.getBoundingClientRect();
       const offset = y - box.top - box.height/2;
@@ -537,7 +903,7 @@
   function wireDropZone(container, onDrop){
     container.addEventListener("dragover", e => {
       e.preventDefault();
-      const dragging = document.querySelector(".job-card.dragging");
+      const dragging = document.querySelector(".drag-item.dragging");
       if(!dragging) return;
       container.classList.add("dragging-over");
       const after = getDragAfterElement(container, e.clientY);
@@ -555,10 +921,10 @@
   }
 
   function syncManualOrderFromDOM(){
-    state.manualOrder = [...queueListEl.querySelectorAll(".job-card")].map(el => el.dataset.jobId);
+    state.manualOrder = [...queueListEl.querySelectorAll(".job-card")].map(el => el.dataset.dragId);
   }
   function syncBlockedOrderFromDOM(){
-    state.blockedOrder = [...blockedListEl.querySelectorAll(".job-card")].map(el => el.dataset.jobId);
+    state.blockedOrder = [...blockedListEl.querySelectorAll(".job-card")].map(el => el.dataset.dragId);
   }
 
   wireDropZone(queueListEl, () => {
@@ -567,6 +933,7 @@
     if(job.blocked){
       job.blocked = false; job.blockedReason = null; job.blockedAt = null;
       job.history.push({ts:new Date(), actor:"planner", note:"Returned to active queue"});
+      addJobOpToResourceOrder(job);
     }
     syncManualOrderFromDOM();
     syncBlockedOrderFromDOM();
@@ -574,6 +941,7 @@
     renderQueue();
     renderBlocked();
     renderStrips();
+    renderResourceBoard();
   });
 
   wireDropZone(blockedListEl, () => {
@@ -591,6 +959,7 @@
       renderQueue();
       renderBlocked();
       renderStrips();
+      renderResourceBoard();
     }, () => {
       // cancelled: snap back to model (job stays active, in its old spot)
       renderQueue();
@@ -606,10 +975,10 @@
     const idx = state.manualOrder.indexOf(job.id);
     if(idx !== -1) state.manualOrder.splice(idx,1);
     if(!state.blockedOrder.includes(job.id)) state.blockedOrder.push(job.id);
+    removeJobOpFromResourceOrder(job);
   }
 
   function reinsertActive(job){
-    computeScore(job); // ensure fresh-ish before comparison (recomputeAll runs right after anyway)
     job.scoreBreakdown = computeScore(job);
     let idx = state.manualOrder.findIndex(id => jobsById[id].scoreBreakdown.finalScore <= job.scoreBreakdown.finalScore);
     if(idx === -1) idx = state.manualOrder.length;
@@ -636,13 +1005,24 @@
       if(bIdx !== -1) state.blockedOrder.splice(bIdx,1);
       job.blocked = false; job.blockedReason = null; job.blockedAt = null;
       job.history.push({ts:new Date(), actor:"planner", note:"Returned to active queue"});
+      addJobOpToResourceOrder(job);
       recomputeAll();
       reinsertActive(job);
       renderQueue();
       renderBlocked();
       renderStrips();
+      renderResourceBoard();
     }
   }
+
+  /* click delegation: open a job's full routing detail (works from either tab) */
+  document.addEventListener("click", e => {
+    const openBtn = e.target.closest("[data-action='open-routing']");
+    if(openBtn){
+      const job = jobsById[openBtn.dataset.job];
+      if(job) openJobRoutingModal(job);
+    }
+  });
 
   /* =========================================================
      BLOCK-REASON MODAL
@@ -682,12 +1062,82 @@
   }
 
   /* =========================================================
+     JOB ROUTING DRILL-IN MODAL
+  ========================================================= */
+  function openJobRoutingModal(job){
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    const riskBadge = job.atRiskFlag === "on-track" ? "" : `<span class="badge ${job.atRiskFlag==="late"?"late":"risk"}">${job.atRiskFlag}</span>`;
+    overlay.innerHTML = `
+      <div class="modal-box wide">
+        <div class="routing-modal-header">
+          <h3>${job.id} — ${job.part}</h3>
+          <p>${job.customer} · ${fmtDue(job.dueDate)} · ${job.percentComplete.toFixed(0)}% complete ${riskBadge}</p>
+        </div>
+        <div class="routing-toolbar">
+          <input type="text" id="routingSearch" placeholder="Search operations…">
+          <select id="routingStatusFilter">
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="ready">Ready</option>
+            <option value="in-progress">In Progress</option>
+            <option value="done">Done</option>
+            <option value="blocked">Blocked</option>
+          </select>
+        </div>
+        <div class="routing-table-wrap">
+          <table class="routing-table">
+            <thead>
+              <tr><th>Seq</th><th>Operation</th><th>Work Center</th><th>Duration</th><th>Target Start</th><th>Target Finish</th><th>Status</th></tr>
+            </thead>
+            <tbody id="routingTableBody"></tbody>
+          </table>
+        </div>
+        <button class="modal-cancel">Close</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    function renderRows(){
+      const q = overlay.querySelector("#routingSearch").value.toLowerCase();
+      const statusFilter = overlay.querySelector("#routingStatusFilter").value;
+      const tbody = overlay.querySelector("#routingTableBody");
+      const rows = job.routing.filter(op => {
+        if(statusFilter !== "all" && op.status !== statusFilter) return false;
+        if(q && !`${op.opType} ${machinesById[op.workCenter]?.name||""}`.toLowerCase().includes(q)) return false;
+        return true;
+      });
+      tbody.innerHTML = rows.length ? rows.map(op => `
+        <tr class="${op.contentionWarning ? "contention":""}">
+          <td>${op.seq}</td>
+          <td>${op.opType}${op.contentionWarning ? ' ⚠':""}</td>
+          <td>${machinesById[op.workCenter]?.name || op.workCenter}</td>
+          <td>${op.durationHours.toFixed(2)}h</td>
+          <td>${fmtDateTime(op.backwardStart)}</td>
+          <td>${fmtDateTime(op.backwardFinish)}</td>
+          <td><span class="badge status-badge-${op.status}">${op.status}</span></td>
+        </tr>
+      `).join("") : `<tr><td colspan="7" class="empty-row">No operations match</td></tr>`;
+    }
+    renderRows();
+    overlay.querySelector("#routingSearch").addEventListener("input", renderRows);
+    overlay.querySelector("#routingStatusFilter").addEventListener("change", renderRows);
+
+    overlay.addEventListener("click", e => {
+      if(e.target.classList.contains("modal-cancel") || e.target === overlay){
+        document.body.removeChild(overlay);
+      }
+    });
+  }
+
+  /* =========================================================
      RESET TO RECOMMENDED
   ========================================================= */
   document.getElementById("resetBtn").addEventListener("click", () => {
     recomputeAll();
     sortManualOrderByRecommended();
     renderQueue();
+    renderResourceBoard();
   });
 
   /* =========================================================
@@ -720,8 +1170,6 @@
           text: `Voice note from receiving: material delay reported for <b>${job.part}</b> (${job.id}) — vendor ETA slipped ${days} day${days>1?"s":""}.`,
           suggestion: {label:"Move to Blocked", applied:false, apply(){
             blockJob(job, "material", "Material delay reported via floor update");
-            const idx = state.manualOrder.indexOf(job.id);
-            if(idx !== -1) state.manualOrder.splice(idx,1);
           }}
         };
       }
@@ -729,13 +1177,13 @@
     {
       category: "labor",
       build(){
-        const pool = activeJobPool();
+        const pool = activeJobPool().filter(j=>j.currentOp && j.currentOp.employee);
         if(!pool.length) return null;
         const job = pick(pool);
-        const employee = employeesById[job.employee];
+        const employee = employeesById[job.currentOp.employee];
         return {
           jobId: job.id,
-          text: `${employee.name} called out sick — coverage needed for ${job.id}.`,
+          text: `${employee.name} called out sick — coverage needed for ${job.id} (Op ${job.currentOp.seq}).`,
           autoApply(){ employee.status = "out"; }
         };
       }
@@ -743,13 +1191,14 @@
     {
       category: "speedup",
       build(){
-        const pool = activeJobPool();
+        const pool = activeJobPool().filter(j=>j.currentOp && j.currentOp.status==="in-progress");
         if(!pool.length) return null;
         const job = pick(pool);
+        const op = job.currentOp;
         return {
           jobId: job.id,
-          text: `Operator finished setup early on ${job.id} — remaining time trimmed.`,
-          autoApply(){ job.estRemainingHours = Math.max(0.5, job.estRemainingHours * 0.75); }
+          text: `Operator finished ${op.opType} early on ${job.id} (Op ${op.seq}) — remaining time trimmed.`,
+          autoApply(){ op.durationHours = Math.max(0.25, op.durationHours * 0.6); }
         };
       }
     },
@@ -761,6 +1210,29 @@
           jobId: null,
           text: `${machine.name} flagged down for unplanned maintenance.`,
           autoApply(){ machine.status = "down"; machine.downUntil = new Date(Date.now()+2*3600000); }
+        };
+      }
+    },
+    {
+      category: "pullforward",
+      build(){
+        const candidates = [];
+        MACHINES.forEach(m=>{
+          const arr = state.resourceOrder[m.id] || [];
+          arr.slice(1).forEach(opId => candidates.push({machine:m, opId}));
+        });
+        if(!candidates.length) return null;
+        const choice = pick(candidates);
+        const op = opsById[choice.opId];
+        const job = jobsById[op.jobId];
+        return {
+          jobId: job.id,
+          text: `${choice.machine.name} will free up soon — Op ${op.seq} of ${job.id} is ready and could jump the queue.`,
+          suggestion: {label:"Pull forward", applied:false, apply(){
+            const arr = state.resourceOrder[choice.machine.id];
+            const idx = arr.indexOf(op.id);
+            if(idx > -1){ arr.splice(idx,1); arr.unshift(op.id); }
+          }}
         };
       }
     },
@@ -798,6 +1270,7 @@
       recomputeAll();
       renderQueue();
       renderStrips();
+      renderResourceBoard();
     }
   }
 
@@ -836,13 +1309,15 @@
       renderQueue();
       renderBlocked();
       renderStrips();
+      renderResourceBoard();
       const actionsEl = applyBtn.closest(".feed-actions");
       actionsEl.innerHTML = `<span class="applied-tag">✓ applied</span>`;
     }
   });
 
   function highlightJob(jobId){
-    const card = document.querySelector(`.job-card[data-job-id="${jobId}"]`);
+    if(state.activeTab !== "priority") showTab("priority");
+    const card = document.querySelector(`#queuePanel .job-card[data-job-id="${jobId}"], #blockedPanel .job-card[data-job-id="${jobId}"]`);
     if(!card) return;
     card.scrollIntoView({behavior:"smooth", block:"center"});
     card.classList.remove("flash");
@@ -859,13 +1334,14 @@
   setInterval(tickClock, 1000);
   tickClock();
 
-  // Periodic recompute: updates scores/urgency/badges without touching manualOrder,
-  // so a planner's manual reordering survives (only numbers/colors refresh).
+  // Periodic recompute: updates scores/urgency/badges without touching manualOrder
+  // or resourceOrder, so a planner's manual reordering survives (only numbers/colors refresh).
   setInterval(() => {
     recomputeAll();
     renderQueue();
     renderBlocked();
     renderStrips();
+    renderResourceBoard();
   }, 30000);
 
   function scheduleNextEvent(){
@@ -880,6 +1356,7 @@
   /* =========================================================
      INIT
   ========================================================= */
+  buildResourceBoardSkeleton();
   renderAll();
 })();
 </script>
