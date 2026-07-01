@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task — Shop Floor Tracker</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-brand">Shop Floor Tracker</div>
+    <div class="topbar-meta">
+      <span>WORKSTATION: <strong id="workstationLabel">--</strong></span>
+      <span>OPERATOR: <strong id="operatorLabel">--</strong></span>
+      <span class="topbar-clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <main class="main" style="flex-direction: row; min-height: 0;">
+    <div class="detail-layout" style="flex: 1;">
+      <div class="detail-main">
+        <a class="back-link" href="#" id="backLink">&larr; Back to task list</a>
+        <span class="detail-op-number" id="detailOpNumber"></span>
+        <h1 class="detail-name" id="detailName"></h1>
+        <span class="detail-category" id="detailCategory"></span>
+        <span class="badge badge-segment" id="detailSegment" style="width: fit-content;"></span>
+        <p class="detail-description" id="detailDescription"></p>
+      </div>
+
+      <div class="detail-sidebar">
+        <div class="parts-list">
+          <div class="parts-list-header">Parts / Materials</div>
+          <div id="partsListBody"></div>
+        </div>
+        <div class="sidebar-tabs">
+          <button class="sidebar-tab active" title="Parts">&#9635;</button>
+          <button class="sidebar-tab" title="History" disabled>&#8635;</button>
+          <button class="sidebar-tab" title="Comments" disabled>&#128172;</button>
+          <button class="sidebar-tab" title="Settings" disabled>&#9881;</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="control-bar">
+    <div class="control-step">
+      <span class="control-status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">--</span>
+      </span>
+      <span id="stepLabel">Step --</span>
+    </div>
+
+    <div class="control-readout">
+      <span class="control-elapsed" id="elapsedReadout">00:00</span>
+    </div>
+
+    <div class="control-target">
+      TAKT
+      <strong id="targetReadout">--</strong>
+    </div>
+
+    <div class="control-spacer"></div>
+
+    <button class="btn-toggle start" id="toggleBtn">Start</button>
+    <button class="btn-complete" id="completeBtn">Complete</button>
+    <button class="btn-flag" title="Report issue" disabled>&#9873;</button>
+  </footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/timer.js"></script>
+  <script src="js/task.js"></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shop Floor Tracker</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-brand">Shop Floor Tracker</div>
+    <div class="topbar-meta">
+      <span class="topbar-clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="resume-banner" id="resumeBanner" style="display: none;">
+      <span id="resumeText"></span>
+      <button class="btn-secondary" id="resumeBtn">Resume</button>
+    </div>
+
+    <section class="picker-section">
+      <h2>Workstation</h2>
+      <div class="tile-grid" id="workstationGrid"></div>
+    </section>
+
+    <section class="picker-section">
+      <h2>Operator</h2>
+      <div class="tile-grid" id="operatorGrid"></div>
+    </section>
+
+    <div class="picker-actions">
+      <button class="btn-primary" id="startShiftBtn" disabled>Start Shift</button>
+    </div>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/timer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

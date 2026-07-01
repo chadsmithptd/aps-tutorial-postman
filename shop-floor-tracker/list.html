@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Today's Tasks — Shop Floor Tracker</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-brand">Shop Floor Tracker</div>
+    <div class="topbar-meta">
+      <span>WORKSTATION: <strong id="workstationLabel">--</strong></span>
+      <span>OPERATOR: <strong id="operatorLabel">--</strong></span>
+      <span class="topbar-clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <a class="back-link" href="index.html">&larr; Switch operator/workstation</a>
+    <div class="list-summary" id="listSummary"></div>
+    <div class="task-row-list" id="taskRowList"></div>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/timer.js"></script>
+  <script src="js/list.js"></script>
+</body>
+</html>
