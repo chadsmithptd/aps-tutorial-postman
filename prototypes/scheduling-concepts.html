@@ -704,7 +704,7 @@
     triage: { resolvedToday:0, cursor:0, cards:[], filter:"all", dismissed:new Set(), snoozed:new Map() },
     explorer: { query:"", groupBy:"none", collapsedGroups:new Set(), drawerPath:[], recentlyViewed:[], openMachinePopupId:null, draggedOpId:null, voicePendingCommand:null },
     copilot: { insights:[], chatLog:[], chatSamplePromptJobId:null, whatifResult:null },
-    compose: { proposals:[], publishHistory:[] },
+    compose: { proposals:[], publishHistory:[], noMatchesFound:false },
   };
 
   /* =========================================================
@@ -1993,7 +1993,9 @@
     const input = document.getElementById("composeInput");
     const text = input.value.trim();
     if(!text) return;
-    state.compose.proposals = parseNarrative(text);
+    const proposals = parseNarrative(text);
+    state.compose.proposals = proposals;
+    state.compose.noMatchesFound = proposals.length === 0;
     input.value = "";
     input.style.height = "auto";
     renderComposeCanvasState();
@@ -2001,11 +2003,13 @@
 
   function removeProposal(index){
     state.compose.proposals.splice(index,1);
+    state.compose.noMatchesFound = false;
     renderComposeCanvasState();
   }
 
   function discardProposals(){
     state.compose.proposals = [];
+    state.compose.noMatchesFound = false;
     renderComposeCanvasState();
   }
 
@@ -2090,7 +2094,12 @@
     const proposalsHtml = renderComposeProposals();
     const queueHistoryHtml = renderComposeQueueAndHistory();
     if(!proposalsHtml && !queueHistoryHtml){
-      canvas.innerHTML = `
+      canvas.innerHTML = state.compose.noMatchesFound ? `
+        <div class="compose-empty-hint">
+          <div class="hint-title">No actionable changes found</div>
+          <div>I couldn't match that to a job id, machine, or employee I recognize. Try something like "Material arrived for J-4100" or "CNC-01 is down for 4 hours."</div>
+        </div>
+      ` : `
         <div class="compose-empty-hint">
           <div class="hint-title">Describe what's happening on the floor</div>
           <div>Material arrivals, backlog changes, machine downtime, employee call-outs — type or dictate it below, review the proposed changes, then publish.</div>
