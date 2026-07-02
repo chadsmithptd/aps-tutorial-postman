@@ -23,6 +23,13 @@
       keyword/pattern-matched template engine, not a live language
       model or any external API call. It says so in its own replies.
     - No backend, no persistence, no auth.
+    - Explorer's voice input is REAL (the browser's Web Speech API, Chrome/
+      Edge only), not simulated — it genuinely listens to your mic. Every
+      parsed scheduling command still requires an explicit on-screen confirm
+      before it changes anything. Note: Chrome restricts microphone access
+      on file:// origins, so if the mic button errors immediately, try
+      serving this file from a local server (e.g. `python3 -m http.server`)
+      instead of opening it directly.
     - This is a sibling exploration to prototypes/scheduling-ui-prototype.html
       (the original 2-tab Priority Queue / Routing & Operations build),
       which is left untouched.
@@ -212,6 +219,81 @@
   .drawer-blocked{color:var(--danger);font-size:12px;display:flex;align-items:center;gap:8px;margin-bottom:8px;}
   .material-risk-note{color:var(--warning);font-size:11px;margin-bottom:10px;}
 
+  /* ---- drag-and-drop (ported from scheduling-ui-prototype.html) ---- */
+  [data-drag-op-id]{cursor:grab;}
+  [data-drag-op-id].dragging{opacity:.35;}
+  .dragging-over{background:rgba(88,166,255,.08) !important;outline:1px dashed var(--accent);outline-offset:-4px;}
+
+  /* ---- breadcrumb drill-down ---- */
+  .drawer-breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:4px;font-size:11.5px;flex:1;min-width:0;}
+  .crumb{color:var(--muted);}
+  .crumb.clickable{color:var(--accent);cursor:pointer;}
+  .crumb.clickable:hover{text-decoration:underline;}
+  .crumb.current{color:var(--text);font-weight:700;}
+  .crumb-sep{color:var(--border);}
+  .rel-sub{display:block;color:var(--muted);font-size:10px;margin-top:1px;}
+
+  /* ---- voice ---- */
+  .explorer-search-bar{display:flex;gap:8px;align-items:center;}
+  .explorer-voice-btn{
+    flex-shrink:0;width:40px;height:40px;border-radius:8px;font-size:16px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .explorer-voice-btn.listening{border-color:var(--danger);color:var(--danger);animation:pulse 1.2s ease-in-out infinite;}
+  .explorer-voice-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .voice-status{
+    display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;
+    background:var(--panel-2);border:1px solid var(--border);font-size:12px;color:var(--muted);min-height:16px;
+  }
+  .voice-status.hidden{display:none;}
+  .voice-status.error{border-color:var(--danger);color:var(--danger);}
+  .voice-status button{font-size:11px;padding:4px 9px;}
+
+  /* ---- toast ---- */
+  .toast-container{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:6px;align-items:center;}
+  .toast{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,.4);animation:slideUpFade .2s ease;}
+  .toast.error{border-color:var(--danger);color:var(--danger);}
+  .toast.info{border-color:var(--accent);}
+  @keyframes slideUpFade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+  /* ---- machine ticker + drop-zone popup ---- */
+  #explorerView{flex-direction:column;}
+  .explorer-ticker{
+    flex-shrink:0;display:flex;gap:18px;padding:8px 16px;background:var(--panel);
+    border-top:1px solid var(--border);overflow-x:auto;
+  }
+  .ticker-group{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  .ticker-chip{
+    display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;
+    border:1px solid var(--border);font-size:11px;background:var(--panel-2);white-space:nowrap;color:var(--text);cursor:pointer;
+  }
+  .ticker-chip.static{cursor:default;}
+  .ticker-chip:hover{border-color:var(--accent);}
+  .ticker-chip.active{border-color:var(--accent);background:rgba(88,166,255,.12);}
+  .ticker-chip .dot{width:6px;height:6px;border-radius:50%;}
+  .ticker-chip .dot.status-running,.ticker-chip .dot.status-on-shift{background:var(--success);}
+  .ticker-chip .dot.status-idle,.ticker-chip .dot.status-break{background:var(--warning);}
+  .ticker-chip .dot.status-down,.ticker-chip .dot.status-out,.ticker-chip .dot.status-maintenance,.ticker-chip .dot.status-off-shift{background:var(--danger);}
+
+  .machine-popup{
+    position:fixed;bottom:44px;left:50%;transform:translateX(-50%);width:420px;max-height:50vh;
+    background:var(--panel);border:1px solid var(--border);border-radius:8px 8px 0 0;
+    box-shadow:0 -4px 20px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden;z-index:40;
+  }
+  .machine-popup.hidden{display:none;}
+  .mp-header{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .mp-header .mp-title{font-weight:700;flex:1;}
+  .mp-running{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:5px;flex-shrink:0;}
+  .mp-queue{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:60px;}
+  .mp-queue.empty::after{content:attr(data-empty-label);color:var(--muted);font-size:11.5px;padding:10px;text-align:center;display:block;}
+  .mp-row{
+    display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--border);
+    border-radius:6px;padding:6px 8px;font-size:11.5px;
+  }
+  .mp-rank{flex-shrink:0;width:18px;height:18px;border-radius:4px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;}
+  .mp-op{flex:1;color:var(--muted);font-size:10.5px;}
+  .mp-pin{flex-shrink:0;font-size:11px;padding:3px 6px;}
+
   /* ==================== COPILOT ==================== */
   .copilot-shell{flex:1;display:flex;overflow:hidden;min-height:0;padding:12px;gap:12px;}
   .copilot-overview{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;min-width:0;}
@@ -317,8 +399,10 @@
     <div class="explorer-shell">
       <div class="explorer-main">
         <div class="explorer-search-bar">
-          <input type="text" id="explorerSearchInput" placeholder="Search jobs, purchase orders, machines, employees…">
+          <input type="text" id="explorerSearchInput" placeholder="Search jobs, purchase orders, machines, employees… or use voice">
+          <button class="explorer-voice-btn" id="voiceBtn" title="Voice search or command">🎤</button>
         </div>
+        <div class="voice-status hidden" id="voiceStatus"></div>
         <div class="explorer-recent-trail" id="explorerRecentTrail"></div>
         <div class="explorer-toolbar">
           <span id="explorerResultCount"></span>
@@ -336,12 +420,15 @@
       </div>
       <div class="explorer-drawer hidden" id="explorerDrawer">
         <div class="drawer-header">
-          <button id="drawerBackBtn">← Back</button>
+          <div class="drawer-breadcrumbs" id="drawerBreadcrumbs"></div>
           <button id="explorerDrawerClose">✕</button>
         </div>
         <div class="drawer-body" id="explorerDrawerBody"></div>
       </div>
     </div>
+    <footer class="explorer-ticker" id="explorerTicker"></footer>
+    <div class="machine-popup hidden" id="machinePopup"></div>
+    <div class="toast-container" id="toastContainer"></div>
   </main>
 
   <main class="concept-view hidden" id="copilotView">
@@ -553,7 +640,7 @@
     feed: [],
     activeTab: "triage",
     triage: { resolvedToday:0, cursor:0, cards:[], filter:"all", dismissed:new Set(), snoozed:new Map() },
-    explorer: { query:"", groupBy:"none", collapsedGroups:new Set(), drawerEntity:null, drawerHistory:[], recentlyViewed:[] },
+    explorer: { query:"", groupBy:"none", collapsedGroups:new Set(), drawerPath:[], recentlyViewed:[], openMachinePopupId:null, draggedOpId:null, voicePendingCommand:null },
     copilot: { insights:[], chatLog:[], chatSamplePromptJobId:null, whatifResult:null },
   };
 
@@ -822,6 +909,74 @@
   function renderHeaderCounts(){
     document.getElementById("activeCount").textContent = jobs.filter(j=>!j.blocked).length;
     document.getElementById("blockedCount").textContent = jobs.filter(j=>j.blocked).length;
+  }
+
+  function showToast(message, kind){
+    const container = document.getElementById("toastContainer");
+    const el = document.createElement("div");
+    el.className = `toast ${kind||""}`;
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(()=>{ el.remove(); }, 2600);
+  }
+
+  /* =========================================================
+     DRAG AND DROP (native HTML5 DnD, ported from scheduling-ui-prototype.html;
+     attribute-driven so any element carrying data-drag-op-id "just works"
+     without needing to be re-wired after every innerHTML re-render)
+  ========================================================= */
+  document.addEventListener("dragstart", e => {
+    const src = e.target.closest("[data-drag-op-id]");
+    if(!src) return;
+    state.explorer.draggedOpId = src.dataset.dragOpId;
+    src.classList.add("dragging");
+  });
+  document.addEventListener("dragend", e => {
+    const src = e.target.closest("[data-drag-op-id]");
+    if(src) src.classList.remove("dragging");
+  });
+
+  function getDragAfterElement(container, y){
+    const els = [...container.querySelectorAll(".mp-row:not(.dragging)")];
+    return els.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height/2;
+      if(offset < 0 && offset > closest.offset){
+        return {offset, element: child};
+      }
+      return closest;
+    }, {offset:-Infinity, element:null}).element;
+  }
+
+  function wireDropZone(container, onDrop){
+    container.addEventListener("dragover", e => {
+      e.preventDefault();
+      container.classList.add("dragging-over");
+      // Only live-move the dragged element within the container when it's
+      // already one of this container's own rows (in-place reorder). An
+      // external drag source (a search mini-card, a table row, a drawer
+      // relationship row) must never be physically relocated into this
+      // container — the drop handler alone decides what happens to it.
+      const dragging = document.querySelector(".mp-row.dragging");
+      if(dragging){
+        const after = getDragAfterElement(container, e.clientY);
+        if(after == null) container.appendChild(dragging);
+        else container.insertBefore(dragging, after);
+      }
+    });
+    container.addEventListener("dragleave", e => {
+      if(e.target === container) container.classList.remove("dragging-over");
+    });
+    container.addEventListener("drop", e => {
+      e.preventDefault();
+      container.classList.remove("dragging-over");
+      onDrop();
+    });
+  }
+
+  function dragAttrForJob(job){
+    if(!job || job.blocked || !job.currentOp || job.currentOp.status !== "ready") return "";
+    return `draggable="true" data-drag-op-id="${job.currentOp.id}"`;
   }
 
   /* =========================================================
@@ -1096,7 +1251,7 @@
   function renderMiniCard(r){
     if(r.type==="job"){
       const j = r.entity;
-      return `<div class="explorer-mini-card" data-open-type="job" data-open-id="${j.id}">
+      return `<div class="explorer-mini-card" ${dragAttrForJob(j)} data-open-type="job" data-open-id="${j.id}">
         <div class="mini-card-title">${j.id} — ${j.part}</div>
         <div class="mini-card-sub">${j.customer} · ${fmtDue(j.dueDate)} · ${j.percentComplete.toFixed(0)}%${j.blocked?" · BLOCKED":""}</div>
       </div>`;
@@ -1141,7 +1296,7 @@
             <thead><tr><th>Job</th><th>Part</th><th>Customer</th><th>Due</th><th>%</th><th>Risk</th></tr></thead>
             <tbody>
               ${group.jobs.map(j=>`
-                <tr data-open-type="job" data-open-id="${j.id}">
+                <tr ${dragAttrForJob(j)} data-open-type="job" data-open-id="${j.id}">
                   <td>${j.id}</td><td>${j.part}</td><td>${j.customer}</td>
                   <td>${fmtDue(j.dueDate)}</td><td>${j.percentComplete.toFixed(0)}%</td>
                   <td>${j.blocked ? "blocked" : j.atRiskFlag}</td>
@@ -1194,27 +1349,109 @@
   }
 
   function openDrawer(type, id){
-    if(state.explorer.drawerEntity) state.explorer.drawerHistory.push(state.explorer.drawerEntity);
-    state.explorer.drawerEntity = {type, id};
+    state.explorer.drawerPath = [{type, id}];
     addToRecentlyViewed(type, id);
     document.getElementById("explorerDrawer").classList.remove("hidden");
     renderDrawer();
   }
   function closeDrawer(){
     document.getElementById("explorerDrawer").classList.add("hidden");
-    state.explorer.drawerEntity = null;
-    state.explorer.drawerHistory = [];
+    state.explorer.drawerPath = [];
   }
-  function drawerBack(){
-    const prev = state.explorer.drawerHistory.pop();
-    if(!prev){ closeDrawer(); return; }
-    state.explorer.drawerEntity = prev;
+  function drillInto(type, id){
+    state.explorer.drawerPath.push({type, id});
+    addToRecentlyViewed(type, id);
+    renderDrawer();
+  }
+  function jumpToCrumb(idx){
+    state.explorer.drawerPath = state.explorer.drawerPath.slice(0, idx+1);
     renderDrawer();
   }
 
+  /* ---- relationship webs: every entity type gets multiple lenses,
+     consumed by one shared renderer, so the drawer supports drilling
+     arbitrarily deep instead of two flat one-off lists. ---- */
+  function jobRelItem(j){ return {type:"job", id:j.id, label:`${j.id} — ${j.part}`, sub:`${j.customer}${j.blocked?" · BLOCKED":""}`}; }
+  function poRelItem(p){ const s = poAggregateStats(p); return {type:"po", id:p.id, label:p.id, sub:`${p.customer} · ${s.count} job${s.count!==1?"s":""}`}; }
+  function machineRelItem(m){ return {type:"machine", id:m.id, label:m.name, sub:m.status}; }
+  function employeeRelItem(e){ return {type:"employee", id:e.id, label:e.name, sub:e.status}; }
+
+  function computeJobRelationships(job){
+    const sections = [];
+    if(job.poId){
+      const sibs = posById[job.poId].jobIds.filter(id=>id!==job.id).map(id=>jobsById[id]);
+      if(sibs.length) sections.push({title:`Same PO (${job.poId})`, items: sibs.map(jobRelItem)});
+    }
+    const samePart = jobs.filter(j=>j.id!==job.id && j.part===job.part);
+    if(samePart.length) sections.push({title:`Same part (${job.part})`, items: samePart.map(jobRelItem)});
+
+    const poSiblingIds = new Set(job.poId ? posById[job.poId].jobIds : []);
+    const sameCustomer = jobs.filter(j=>j.id!==job.id && j.customer===job.customer && !poSiblingIds.has(j.id));
+    if(sameCustomer.length) sections.push({title:`Same customer (${job.customer})`, items: sameCustomer.map(jobRelItem)});
+
+    if(job.currentOp){
+      const machineId = job.currentOp.workCenter;
+      const sameMachine = jobs.filter(j=>j.id!==job.id && !j.blocked && j.currentOp && j.currentOp.workCenter===machineId);
+      if(sameMachine.length) sections.push({title:`Also on ${machinesById[machineId].name}`, items: sameMachine.map(jobRelItem)});
+    }
+
+    if(job.atRiskFlag !== "on-track"){
+      const sameRisk = jobs.filter(j=>j.id!==job.id && j.atRiskFlag===job.atRiskFlag);
+      if(sameRisk.length) sections.push({title:`Also ${job.atRiskFlag}`, items: sameRisk.map(jobRelItem)});
+    }
+    return sections;
+  }
+
+  function computePoRelationships(po){
+    const sections = [];
+    const poJobs = po.jobIds.map(id=>jobsById[id]);
+    sections.push({title:"Jobs on this PO", items: poJobs.map(jobRelItem)});
+    const otherPOs = purchaseOrders.filter(p=>p.id!==po.id && p.customer===po.customer);
+    if(otherPOs.length) sections.push({title:`Other POs from ${po.customer}`, items: otherPOs.map(poRelItem)});
+    const machineIds = [...new Set(poJobs.filter(j=>j.currentOp).map(j=>j.currentOp.workCenter))];
+    if(machineIds.length) sections.push({title:"Machines in use", items: machineIds.map(mid=>machineRelItem(machinesById[mid]))});
+    return sections;
+  }
+
+  function computeMachineRelationships(m){
+    const sections = [];
+    const queueJobs = (state.resourceOrder[m.id]||[]).map(id=>jobsById[opsById[id].jobId]);
+    if(queueJobs.length) sections.push({title:"Ready queue", items: queueJobs.map(jobRelItem)});
+    const alternates = MACHINES.filter(other => other.id!==m.id &&
+      Object.values(OP_TEMPLATES).some(t=> t.pool.includes(m.id) && t.pool.includes(other.id)));
+    if(alternates.length) sections.push({title:"Alternate machines for this work", items: alternates.map(machineRelItem)});
+    const waiting = computeWaitingForMachine(m.id);
+    if(waiting.length) sections.push({title:"Waiting on predecessor", items: waiting.map(({job})=>jobRelItem(job))});
+    return sections;
+  }
+
+  function computeEmployeeRelationships(e){
+    const sections = [];
+    const currentJob = jobs.find(j=>!j.blocked && j.currentOp && j.currentOp.employee===e.id && j.currentOp.status==="in-progress");
+    if(currentJob) sections.push({title:"Currently assigned", items:[jobRelItem(currentJob)]});
+    const peers = EMPLOYEES.filter(o=>o.id!==e.id && o.status===e.status);
+    if(peers.length) sections.push({title:`Also ${e.status}`, items: peers.map(employeeRelItem)});
+    return sections;
+  }
+
+  function renderRelationshipSections(sections){
+    return sections.map(sec=>{
+      const shown = sec.items.slice(0,5);
+      const extra = sec.items.length - shown.length;
+      return `
+        <div class="drawer-section">
+          <h4>${sec.title}</h4>
+          ${shown.map(it=>{
+            const dragAttr = it.type==="job" ? dragAttrForJob(jobsById[it.id]) : "";
+            return `<div class="drawer-link-row" ${dragAttr} data-open-type="${it.type}" data-open-id="${it.id}">${it.label}${it.sub?`<span class="rel-sub">${it.sub}</span>`:""}</div>`;
+          }).join("")}
+          ${extra>0 ? `<div class="drawer-empty">+${extra} more</div>` : ""}
+        </div>
+      `;
+    }).join("");
+  }
+
   function renderJobDrawer(job){
-    const siblings = job.poId ? posById[job.poId].jobIds.filter(id=>id!==job.id).map(id=>jobsById[id]) : [];
-    const similar = jobs.filter(j=>j.id!==job.id && j.part===job.part).slice(0,5);
     const routingPreview = job.routing.slice(0, 20);
     return `
       <h3>${job.id} — ${job.part}</h3>
@@ -1235,14 +1472,11 @@
         <h4>Routing (first ${routingPreview.length} of ${job.routing.length})</h4>
         ${routingPreview.map(op=>`<div class="drawer-routing-row"><span>Op ${op.seq}</span><span>${op.opType}</span><span>${machinesById[op.workCenter].name}</span><span>${op.status}</span></div>`).join("")}
       </div>
-      ${siblings.length ? `<div class="drawer-section"><h4>PO siblings</h4>${siblings.map(j=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${j.id}">${j.id} — ${j.part}</div>`).join("")}</div>` : ""}
-      ${similar.length ? `<div class="drawer-section"><h4>Similar jobs</h4>${similar.map(j=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${j.id}">${j.id} — ${j.customer}</div>`).join("")}</div>` : ""}
+      ${renderRelationshipSections(computeJobRelationships(job))}
     `;
   }
 
   function renderMachineDrawer(m){
-    const queue = (state.resourceOrder[m.id]||[]).map(id=>opsById[id]);
-    const waiting = computeWaitingForMachine(m.id);
     const running = jobs.filter(j=>!j.blocked && j.currentOp && j.currentOp.status==="in-progress" && j.currentOp.workCenter===m.id);
     return `
       <h3>${m.name}</h3>
@@ -1250,18 +1484,12 @@
       <div class="drawer-section"><h4>Running</h4>
         ${running.length ? running.map(j=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${j.id}">${j.id} · Op ${j.currentOp.seq}</div>`).join("") : `<p class="drawer-empty">Idle</p>`}
       </div>
-      <div class="drawer-section"><h4>Ready queue (${queue.length})</h4>
-        ${queue.length ? queue.map((op,i)=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${op.jobId}">${i+1}. ${op.jobId} — Op ${op.seq} · ${op.opType}</div>`).join("") : `<p class="drawer-empty">No ready operations</p>`}
-      </div>
-      <div class="drawer-section"><h4>Waiting on predecessor (${waiting.length})</h4>
-        ${waiting.length ? waiting.map(({job,nextOp})=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${job.id}">${job.id} — Op ${nextOp.seq} (waiting on Op ${job.currentOp.seq})</div>`).join("") : `<p class="drawer-empty">Nothing queued behind current work</p>`}
-      </div>
+      ${renderRelationshipSections(computeMachineRelationships(m))}
     `;
   }
 
   function renderPoDrawer(po){
     const stats = poAggregateStats(po);
-    const poJobs = po.jobIds.map(id=>jobsById[id]);
     return `
       <h3>${po.id}</h3>
       <p class="drawer-sub">${po.customer}</p>
@@ -1271,30 +1499,292 @@
         <div><span>Blocked</span><b>${stats.blocked}</b></div>
         <div><span>Earliest due</span><b>${stats.earliestDue ? fmtDue(stats.earliestDue) : "—"}</b></div>
       </div>
-      <div class="drawer-section"><h4>Jobs</h4>
-        ${poJobs.map(j=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${j.id}">${j.id} — ${j.part} · ${j.percentComplete.toFixed(0)}% · ${j.blocked?"BLOCKED":j.atRiskFlag}</div>`).join("")}
-      </div>
+      ${renderRelationshipSections(computePoRelationships(po))}
     `;
   }
 
   function renderEmployeeDrawer(e){
-    const currentJob = jobs.find(j=>!j.blocked && j.currentOp && j.currentOp.employee===e.id && j.currentOp.status==="in-progress");
     return `
       <h3>${e.name}</h3>
       <p class="drawer-sub">Status: ${e.status}</p>
-      ${currentJob ? `<div class="drawer-link-row" data-open-type="job" data-open-id="${currentJob.id}">Currently on ${currentJob.id} — Op ${currentJob.currentOp.seq}</div>` : `<p class="drawer-empty">Not currently assigned to an in-progress operation</p>`}
+      ${renderRelationshipSections(computeEmployeeRelationships(e))}
     `;
   }
 
+  function entityLabel(type, id){
+    if(type==="job") return id;
+    if(type==="po") return id;
+    if(type==="machine") return machinesById[id] ? machinesById[id].name : id;
+    if(type==="employee") return employeesById[id] ? employeesById[id].name : id;
+    return id;
+  }
+  function renderBreadcrumbs(path){
+    return path.map((entry,idx)=>{
+      const isLast = idx===path.length-1;
+      return `<span class="crumb ${isLast?"current":"clickable"}" ${isLast?"":`data-crumb-idx="${idx}"`}>${entityLabel(entry.type,entry.id)}</span>`;
+    }).join(`<span class="crumb-sep">›</span>`);
+  }
+
   function renderDrawer(){
+    const path = state.explorer.drawerPath;
+    document.getElementById("drawerBreadcrumbs").innerHTML = path.length ? renderBreadcrumbs(path) : "";
     const bodyEl = document.getElementById("explorerDrawerBody");
-    const entity = state.explorer.drawerEntity;
-    if(!entity){ bodyEl.innerHTML = ""; return; }
-    if(entity.type === "job") bodyEl.innerHTML = renderJobDrawer(jobsById[entity.id]);
-    else if(entity.type === "po") bodyEl.innerHTML = renderPoDrawer(posById[entity.id]);
-    else if(entity.type === "machine") bodyEl.innerHTML = renderMachineDrawer(machinesById[entity.id]);
-    else if(entity.type === "employee") bodyEl.innerHTML = renderEmployeeDrawer(employeesById[entity.id]);
-    document.getElementById("drawerBackBtn").style.visibility = state.explorer.drawerHistory.length ? "visible":"hidden";
+    if(!path.length){ bodyEl.innerHTML = ""; return; }
+    const current = path[path.length-1];
+    if(current.type === "job") bodyEl.innerHTML = renderJobDrawer(jobsById[current.id]);
+    else if(current.type === "po") bodyEl.innerHTML = renderPoDrawer(posById[current.id]);
+    else if(current.type === "machine") bodyEl.innerHTML = renderMachineDrawer(machinesById[current.id]);
+    else if(current.type === "employee") bodyEl.innerHTML = renderEmployeeDrawer(employeesById[current.id]);
+  }
+
+  /* =========================================================
+     MACHINE TICKER + DROP-ZONE POPUP — machine-level scheduling
+     with one click (pull-to-top) or a drag from anywhere in Explorer.
+  ========================================================= */
+  function renderExplorerTicker(){
+    const el = document.getElementById("explorerTicker");
+    el.innerHTML = `
+      <div class="ticker-group">
+        ${MACHINES.map(m=>`<button class="ticker-chip ${state.explorer.openMachinePopupId===m.id?"active":""}" data-ticker-machine="${m.id}"><span class="dot status-${m.status}"></span>${m.name}<span class="count-badge">${(state.resourceOrder[m.id]||[]).length}</span></button>`).join("")}
+      </div>
+      <div class="ticker-group">
+        ${EMPLOYEES.map(e=>`<span class="ticker-chip static"><span class="dot status-${e.status}"></span>${e.name}</span>`).join("")}
+      </div>
+    `;
+  }
+
+  function openMachinePopup(machineId){
+    if(state.explorer.openMachinePopupId === machineId){ closeMachinePopup(); return; }
+    state.explorer.openMachinePopupId = machineId;
+    document.getElementById("machinePopup").classList.remove("hidden");
+    renderMachinePopup(machineId);
+    renderExplorerTicker();
+  }
+  function closeMachinePopup(){
+    state.explorer.openMachinePopupId = null;
+    document.getElementById("machinePopup").classList.add("hidden");
+    renderExplorerTicker();
+  }
+
+  function renderMachinePopup(machineId){
+    const m = machinesById[machineId];
+    const queue = (state.resourceOrder[machineId]||[]).map(id=>opsById[id]);
+    const running = jobs.filter(j=>!j.blocked && j.currentOp && j.currentOp.status==="in-progress" && j.currentOp.workCenter===machineId);
+    const popupEl = document.getElementById("machinePopup");
+    popupEl.innerHTML = `
+      <div class="mp-header">
+        <span class="dot status-${m.status}"></span>
+        <span class="mp-title">${m.name}</span>
+        <span class="count-badge">${queue.length}</span>
+        <button data-close-machine-popup>✕</button>
+      </div>
+      <div class="mp-running">${running.length ? running.map(j=>`<span class="badge">${j.id} · Op ${j.currentOp.seq}</span>`).join("") : `<span class="drawer-empty">Idle</span>`}</div>
+      <div class="mp-queue" id="mpQueue" data-empty-label="Drag a job here to queue it on ${m.name}">
+        ${queue.map((op,i)=>`
+          <div class="mp-row" draggable="true" data-drag-op-id="${op.id}">
+            <span class="mp-rank">${i+1}</span>
+            <span class="jid" data-open-type="job" data-open-id="${op.jobId}">${op.jobId}</span>
+            <span class="mp-op">Op ${op.seq} · ${op.opType} · ${op.durationHours.toFixed(1)}h</span>
+            <button class="mp-pin" data-mp-pull="${op.id}" title="Pull to top">⤒</button>
+          </div>
+        `).join("")}
+      </div>
+    `;
+    popupEl.querySelector(".mp-queue").classList.toggle("empty", queue.length===0);
+    wireDropZone(document.getElementById("mpQueue"), ()=> handleMachinePopupDrop(machineId, document.getElementById("mpQueue")));
+  }
+
+  // Shared by drag-drop and voice's reassign command — a job's current
+  // operation is only ever "assigned" to a machine, never forced there.
+  function reassignOpToMachine(op, machineId){
+    const job = jobsById[op.jobId];
+    if(job.blocked || op.status !== "ready"){
+      return {ok:false, message:"Cannot assign — that job has no ready operation right now."};
+    }
+    const tmpl = OP_TEMPLATES[op.opType];
+    if(!tmpl.pool.includes(machineId)){
+      return {ok:false, message:`${op.opType} can't run on ${machinesById[machineId].name}.`};
+    }
+    if(op.workCenter !== machineId){
+      const oldArr = state.resourceOrder[op.workCenter];
+      const oldIdx = oldArr ? oldArr.indexOf(op.id) : -1;
+      if(oldIdx>-1) oldArr.splice(oldIdx,1);
+      op.workCenter = machineId;
+    }
+    const arr = state.resourceOrder[machineId];
+    const existingIdx = arr.indexOf(op.id);
+    if(existingIdx>-1) arr.splice(existingIdx,1);
+    arr.unshift(op.id);
+    recomputeAll();
+    return {ok:true};
+  }
+
+  function handleMachinePopupDrop(machineId, container){
+    const opId = state.explorer.draggedOpId;
+    state.explorer.draggedOpId = null;
+    if(!opId) return;
+    const op = opsById[opId];
+    if(!op) return;
+
+    if(op.workCenter === machineId){
+      // internal reorder: DOM already reflects the new order (live-moved during dragover)
+      state.resourceOrder[machineId] = [...container.querySelectorAll("[data-drag-op-id]")].map(el=>el.dataset.dragOpId);
+      renderMachinePopup(machineId);
+      return;
+    }
+
+    const result = reassignOpToMachine(op, machineId);
+    if(!result.ok){
+      showToast(result.message, "error");
+      return;
+    }
+    renderMachinePopup(machineId);
+    renderExplorerResults();
+    renderExplorerTicker();
+    renderHeaderCounts();
+  }
+
+  function pullQueueRowToTop(machineId, opId){
+    const op = opsById[opId];
+    if(!op) return;
+    pinOpToFront(jobsById[op.jobId]);
+    renderMachinePopup(machineId);
+    renderExplorerResults();
+    renderExplorerTicker();
+  }
+
+  /* =========================================================
+     VOICE — real Web Speech API (Chrome/Edge). Plain speech falls back
+     to search; recognized scheduling commands always require an
+     on-screen confirm before executing, and dispatch through the exact
+     same functions clicks/drags use, so all three stay consistent.
+  ========================================================= */
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let voiceRecognizer = null;
+  let voiceListening = false;
+
+  function findJobIdInText(t){
+    const m = t.match(/\bj[\s-]?\d{3,5}\b/i);
+    if(!m) return null;
+    const digits = m[0].replace(/\D/g,"");
+    const id = "J-"+digits;
+    return jobsById[id] ? id : null;
+  }
+  function findMachineInText(t){
+    const lower = t.toLowerCase();
+    return MACHINES.find(m=> lower.includes(m.name.toLowerCase()) || lower.includes(m.name.toLowerCase().replace("-"," ")));
+  }
+  function parseVoiceCommand(text){
+    const lower = text.toLowerCase();
+    const jobId = findJobIdInText(text);
+    if(!jobId) return null;
+    if(/pull forward|move up|prioriti[sz]e/.test(lower)){
+      return {intent:"pullforward", jobId, label:`Pull forward ${jobId}`};
+    }
+    if(/unblock/.test(lower)){
+      return {intent:"unblock", jobId, label:`Unblock ${jobId}`};
+    }
+    if(/\bblock\b/.test(lower)){
+      const reasonMatch = REASONS.find(r=> lower.includes(r.key.replace("-"," ")));
+      const reason = reasonMatch ? reasonMatch.key : "other";
+      return {intent:"block", jobId, reason, label:`Block ${jobId} (${reason})`};
+    }
+    const machine = findMachineInText(text);
+    if(machine && /move|reassign|send/.test(lower)){
+      return {intent:"reassign", jobId, machineId:machine.id, label:`Reassign ${jobId} to ${machine.name}`};
+    }
+    return null;
+  }
+
+  function executeVoiceCommand(command){
+    const job = jobsById[command.jobId];
+    if(!job) return;
+    if(command.intent === "pullforward"){
+      pinOpToFront(job);
+    } else if(command.intent === "unblock"){
+      unblockJob(job);
+    } else if(command.intent === "block"){
+      blockJob(job, command.reason, "Blocked via voice command");
+    } else if(command.intent === "reassign"){
+      if(job.currentOp){
+        const result = reassignOpToMachine(job.currentOp, command.machineId);
+        if(!result.ok){ showToast(result.message, "error"); return; }
+      } else {
+        showToast("Cannot reassign — job has no current operation.", "error");
+        return;
+      }
+    }
+    recomputeAll();
+    refreshActiveTab();
+    showVoiceStatus(`Done: ${command.label}`, false);
+  }
+
+  function cancelVoiceCommand(){
+    state.explorer.voicePendingCommand = null;
+    showVoiceStatus("Cancelled.", false);
+  }
+
+  function showVoiceStatus(html, isError){
+    const el = document.getElementById("voiceStatus");
+    el.innerHTML = html;
+    el.classList.remove("hidden");
+    el.classList.toggle("error", !!isError);
+  }
+
+  function showVoiceCommandConfirm(command){
+    state.explorer.voicePendingCommand = command;
+    showVoiceStatus(`<span>${command.label}?</span> <button data-voice-confirm>Confirm</button> <button data-voice-cancel>Cancel</button>`, false);
+  }
+
+  function handleVoiceTranscript(transcript){
+    const command = parseVoiceCommand(transcript);
+    if(command){
+      showVoiceCommandConfirm(command);
+    } else {
+      document.getElementById("explorerSearchInput").value = transcript;
+      state.explorer.query = transcript;
+      renderExplorerResults();
+      showVoiceStatus(`Searched for "${transcript}"`, false);
+    }
+  }
+
+  function initVoice(){
+    const btn = document.getElementById("voiceBtn");
+    if(!SpeechRecognitionCtor){
+      btn.disabled = true;
+      btn.title = "Voice input isn't supported in this browser — try Chrome or Edge.";
+      return;
+    }
+    voiceRecognizer = new SpeechRecognitionCtor();
+    voiceRecognizer.continuous = false;
+    voiceRecognizer.interimResults = true;
+    voiceRecognizer.lang = "en-US";
+    voiceRecognizer.onresult = (e)=>{
+      let transcript = "";
+      for(let i=e.resultIndex;i<e.results.length;i++) transcript += e.results[i][0].transcript;
+      showVoiceStatus(`"${transcript}"`, false);
+      if(e.results[e.results.length-1].isFinal) handleVoiceTranscript(transcript);
+    };
+    voiceRecognizer.onerror = (e)=>{
+      showVoiceStatus(`Voice error: ${e.error}`, true);
+      voiceListening = false;
+      btn.classList.remove("listening");
+    };
+    voiceRecognizer.onend = ()=>{
+      voiceListening = false;
+      btn.classList.remove("listening");
+    };
+    btn.addEventListener("click", ()=>{
+      if(voiceListening){ voiceRecognizer.stop(); return; }
+      try{
+        voiceRecognizer.start();
+        voiceListening = true;
+        btn.classList.add("listening");
+        showVoiceStatus("Listening…", false);
+      } catch(err){
+        showVoiceStatus("Could not start microphone.", true);
+      }
+    });
   }
 
   document.getElementById("explorerSearchInput").addEventListener("input", e=>{
@@ -1305,7 +1795,6 @@
     state.explorer.groupBy = e.target.value;
     renderExplorerResults();
   });
-  document.getElementById("drawerBackBtn").addEventListener("click", drawerBack);
   document.getElementById("explorerDrawerClose").addEventListener("click", closeDrawer);
 
   /* =========================================================
@@ -1597,8 +2086,35 @@
      GLOBAL CLICK DELEGATION (entity links, block/unblock, prompts, groups)
   ========================================================= */
   document.addEventListener("click", e => {
+    const crumb = e.target.closest("[data-crumb-idx]");
+    if(crumb){ jumpToCrumb(parseInt(crumb.dataset.crumbIdx,10)); return; }
+
+    const tickerMachine = e.target.closest("[data-ticker-machine]");
+    if(tickerMachine){ openMachinePopup(tickerMachine.dataset.tickerMachine); return; }
+
+    const mpPull = e.target.closest("[data-mp-pull]");
+    if(mpPull){ pullQueueRowToTop(state.explorer.openMachinePopupId, mpPull.dataset.mpPull); return; }
+
+    const mpClose = e.target.closest("[data-close-machine-popup]");
+    if(mpClose){ closeMachinePopup(); return; }
+
+    const voiceConfirm = e.target.closest("[data-voice-confirm]");
+    if(voiceConfirm){
+      const cmd = state.explorer.voicePendingCommand;
+      state.explorer.voicePendingCommand = null;
+      if(cmd) executeVoiceCommand(cmd);
+      return;
+    }
+    const voiceCancel = e.target.closest("[data-voice-cancel]");
+    if(voiceCancel){ cancelVoiceCommand(); return; }
+
     const openTarget = e.target.closest("[data-open-type]");
-    if(openTarget){ jumpToEntity(openTarget.dataset.openType, openTarget.dataset.openId); return; }
+    if(openTarget){
+      const inDrawer = !!openTarget.closest("#explorerDrawerBody");
+      if(inDrawer) drillInto(openTarget.dataset.openType, openTarget.dataset.openId);
+      else jumpToEntity(openTarget.dataset.openType, openTarget.dataset.openId);
+      return;
+    }
 
     const groupToggle = e.target.closest("[data-toggle-group]");
     if(groupToggle){
@@ -1617,6 +2133,7 @@
         recomputeAll();
         renderDrawer();
         renderExplorerResults();
+        renderExplorerTicker();
         renderHeaderCounts();
       }, ()=>{});
       return;
@@ -1628,6 +2145,7 @@
       recomputeAll();
       renderDrawer();
       renderExplorerResults();
+      renderExplorerTicker();
       renderHeaderCounts();
       return;
     }
@@ -1644,7 +2162,8 @@
     if(state.activeTab === "triage"){
       rebuildTriageInbox(); renderTriageStream(); renderTriageDetail();
     } else if(state.activeTab === "explorer"){
-      renderExplorerResults(); renderDrawer(); renderRecentlyViewedTrail();
+      renderExplorerResults(); renderDrawer(); renderRecentlyViewedTrail(); renderExplorerTicker();
+      if(state.explorer.openMachinePopupId) renderMachinePopup(state.explorer.openMachinePopupId);
     } else if(state.activeTab === "copilot"){
       state.copilot.insights = generateInsights();
       renderInsights(); renderCopilotStatRow(); renderSuggestedPrompts();
@@ -1795,6 +2314,7 @@
   initResourceOrder();
   seedInitialBlocks(4);
   recomputeAll();
+  initVoice();
   showTab("triage");
   scheduleNextEvent();
 })();
