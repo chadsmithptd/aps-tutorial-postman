@@ -1,9 +1,13 @@
 <!DOCTYPE html>
 <!--
-  Scheduling UI — 3 Concept Prototypes (Triage / Explorer / Copilot)
+  Scheduling UI — 4 Concept Prototypes (Compose / Triage / Explorer / Copilot)
 
-  Three genuinely different takes on the same underlying scheduling data,
+  Four genuinely different takes on the same underlying scheduling data,
   meant to be clicked through and compared side by side via the tab bar:
+    - Compose:  optimized for narrate-and-publish scheduling — describe
+                the situation in text or voice, review the proposed
+                changes, then publish a versioned snapshot of the queue.
+                This is the default/landing tab.
     - Triage:   optimized for ease of scheduling (an inbox of small,
                 fast, single-click decisions instead of a big list).
     - Explorer: optimized for instant on-demand research (search-first,
@@ -11,9 +15,10 @@
     - Copilot:  optimized for AI-enhanced learning (proactive pattern
                 insights + a chat assistant + a what-if simulator).
 
-  All three share one in-memory dataset generated on load, so an action
+  All four share one in-memory dataset generated on load, so an action
   taken in one tab (e.g. blocking a job) is immediately visible from the
-  others.
+  others. Compose and Explorer also share a machine/employee ticker and
+  drag-and-drop machine popup, so machine detail is always one click away.
 
   KNOWN LIMITATIONS (prototype, not the real build):
     - Everything is in-memory. Refreshing the page resets all state.
@@ -23,13 +28,15 @@
       keyword/pattern-matched template engine, not a live language
       model or any external API call. It says so in its own replies.
     - No backend, no persistence, no auth.
-    - Explorer's voice input is REAL (the browser's Web Speech API, Chrome/
-      Edge only), not simulated — it genuinely listens to your mic. Every
-      parsed scheduling command still requires an explicit on-screen confirm
-      before it changes anything. Note: Chrome restricts microphone access
-      on file:// origins, so if the mic button errors immediately, try
-      serving this file from a local server (e.g. `python3 -m http.server`)
-      instead of opening it directly.
+    - Explorer's and Compose's voice input are REAL (the browser's Web
+      Speech API, Chrome/Edge only), not simulated — they genuinely listen
+      to your mic. Explorer parses single scheduling commands and always
+      requires an explicit on-screen confirm before changing anything;
+      Compose dictates continuously into the narrative box and never
+      auto-submits — only the send button or Enter does that. Note: Chrome
+      restricts microphone access on file:// origins, so if the mic button
+      errors immediately, try serving this file from a local server (e.g.
+      `python3 -m http.server`) instead of opening it directly.
     - This is a sibling exploration to prototypes/scheduling-ui-prototype.html
       (the original 2-tab Priority Queue / Routing & Operations build),
       which is left untouched.
@@ -333,6 +340,48 @@
   .prompt-chip:hover{border-color:var(--accent);color:var(--text);}
   .chat-input-form{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border);flex-shrink:0;}
   .chat-input-form input{flex:1;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:12px;}
+
+  /* ==================== COMPOSE ==================== */
+  .compose-shell{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;min-height:0;}
+  .compose-canvas{flex:1;overflow-y:auto;padding:24px;padding-bottom:96px;display:flex;flex-direction:column;gap:16px;}
+  .compose-empty-hint{margin:auto;color:var(--muted);text-align:center;padding:40px;font-size:13px;max-width:420px;}
+  .compose-empty-hint .hint-title{font-size:15px;color:var(--text);font-weight:700;margin-bottom:6px;}
+
+  .compose-inputbar{
+    position:absolute;left:50%;bottom:20px;transform:translateX(-50%);width:min(720px,90%);
+    display:flex;align-items:flex-end;gap:8px;background:var(--panel);border:1px solid var(--border);
+    border-radius:20px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:20;
+  }
+  .compose-input{
+    flex:1;background:transparent;border:none;color:var(--text);resize:none;
+    font-family:inherit;font-size:13px;max-height:140px;outline:none;padding:6px 4px;
+  }
+  .compose-mic-btn,.compose-send-btn{
+    flex-shrink:0;width:36px;height:36px;border-radius:50%;font-size:14px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .compose-mic-btn.listening{border-color:var(--danger);color:var(--danger);animation:pulse 1.2s ease-in-out infinite;}
+  .compose-mic-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  .proposal-header{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  .proposal-header .title{font-weight:700;font-size:13px;flex:1;}
+  .proposal-list{display:flex;flex-direction:column;gap:8px;}
+  .proposal-card{
+    display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--border);
+    border-radius:6px;padding:8px 10px;font-size:12px;
+  }
+  .proposal-card.unrecognized{opacity:.6;border-style:dashed;}
+  .proposal-clause{color:var(--muted);font-size:11px;flex:1;min-width:0;}
+  .proposal-label{font-weight:600;flex-shrink:0;}
+  .proposal-skip{flex-shrink:0;font-size:11px;padding:3px 8px;}
+
+  .compose-queue-block,.publish-history-block{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;}
+  .compose-queue-block h4,.publish-history-block h4{margin:0 0 8px;font-size:12px;}
+  .compose-queue-list{display:flex;flex-direction:column;gap:4px;}
+  .publish-history-list{display:flex;flex-direction:column;gap:6px;}
+  .publish-entry-header{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11.5px;}
+  .publish-entry-header .timestamp{flex:1;color:var(--muted);}
+  .publish-entry-body{padding:6px 10px;font-size:11px;color:var(--muted);}
 </style>
 </head>
 <body>
@@ -348,12 +397,13 @@
   </header>
 
   <nav class="tabbar">
-    <button class="tab-btn active" data-tab="triage">Triage<span class="tab-tagline">ease of scheduling</span></button>
+    <button class="tab-btn" data-tab="compose">Compose<span class="tab-tagline">narrate &amp; publish</span></button>
+    <button class="tab-btn" data-tab="triage">Triage<span class="tab-tagline">ease of scheduling</span></button>
     <button class="tab-btn" data-tab="explorer">Explorer<span class="tab-tagline">instant research</span></button>
     <button class="tab-btn" data-tab="copilot">Copilot<span class="tab-tagline">AI-enhanced learning</span></button>
   </nav>
 
-  <main class="concept-view" id="triageView">
+  <main class="concept-view hidden" id="triageView">
     <div class="triage-shell">
       <aside class="triage-sidebar">
         <div class="triage-counter">
@@ -426,9 +476,6 @@
         <div class="drawer-body" id="explorerDrawerBody"></div>
       </div>
     </div>
-    <footer class="explorer-ticker" id="explorerTicker"></footer>
-    <div class="machine-popup hidden" id="machinePopup"></div>
-    <div class="toast-container" id="toastContainer"></div>
   </main>
 
   <main class="concept-view hidden" id="copilotView">
@@ -461,6 +508,21 @@
       </div>
     </div>
   </main>
+
+  <main class="concept-view hidden" id="composeView">
+    <div class="compose-shell">
+      <div class="compose-canvas" id="composeCanvas"></div>
+      <div class="compose-inputbar">
+        <textarea id="composeInput" class="compose-input" rows="1" placeholder="Describe your plan… material arrivals, backlog changes, machine downtime"></textarea>
+        <button class="compose-mic-btn" id="composeMicBtn" title="Dictate">🎤</button>
+        <button class="compose-send-btn" id="composeSendBtn" title="Submit">➤</button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="explorer-ticker hidden" id="sharedTicker"></footer>
+  <div class="machine-popup hidden" id="machinePopup"></div>
+  <div class="toast-container" id="toastContainer"></div>
 
 </div>
 
@@ -638,10 +700,11 @@
   const state = {
     resourceOrder: {},
     feed: [],
-    activeTab: "triage",
+    activeTab: "compose",
     triage: { resolvedToday:0, cursor:0, cards:[], filter:"all", dismissed:new Set(), snoozed:new Map() },
     explorer: { query:"", groupBy:"none", collapsedGroups:new Set(), drawerPath:[], recentlyViewed:[], openMachinePopupId:null, draggedOpId:null, voicePendingCommand:null },
     copilot: { insights:[], chatLog:[], chatSamplePromptJobId:null, whatifResult:null },
+    compose: { proposals:[], publishHistory:[] },
   };
 
   /* =========================================================
@@ -1541,8 +1604,8 @@
      MACHINE TICKER + DROP-ZONE POPUP — machine-level scheduling
      with one click (pull-to-top) or a drag from anywhere in Explorer.
   ========================================================= */
-  function renderExplorerTicker(){
-    const el = document.getElementById("explorerTicker");
+  function renderSharedTicker(){
+    const el = document.getElementById("sharedTicker");
     el.innerHTML = `
       <div class="ticker-group">
         ${MACHINES.map(m=>`<button class="ticker-chip ${state.explorer.openMachinePopupId===m.id?"active":""}" data-ticker-machine="${m.id}"><span class="dot status-${m.status}"></span>${m.name}<span class="count-badge">${(state.resourceOrder[m.id]||[]).length}</span></button>`).join("")}
@@ -1558,12 +1621,12 @@
     state.explorer.openMachinePopupId = machineId;
     document.getElementById("machinePopup").classList.remove("hidden");
     renderMachinePopup(machineId);
-    renderExplorerTicker();
+    renderSharedTicker();
   }
   function closeMachinePopup(){
     state.explorer.openMachinePopupId = null;
     document.getElementById("machinePopup").classList.add("hidden");
-    renderExplorerTicker();
+    renderSharedTicker();
   }
 
   function renderMachinePopup(machineId){
@@ -1640,7 +1703,7 @@
     }
     renderMachinePopup(machineId);
     renderExplorerResults();
-    renderExplorerTicker();
+    renderSharedTicker();
     renderHeaderCounts();
   }
 
@@ -1650,7 +1713,7 @@
     pinOpToFront(jobsById[op.jobId]);
     renderMachinePopup(machineId);
     renderExplorerResults();
-    renderExplorerTicker();
+    renderSharedTicker();
   }
 
   /* =========================================================
@@ -1796,6 +1859,306 @@
     renderExplorerResults();
   });
   document.getElementById("explorerDrawerClose").addEventListener("click", closeDrawer);
+
+  /* =========================================================
+     COMPOSE — narrative parsing. Describe the situation in free text
+     (or dictate it), review the proposed changes, then publish a
+     versioned snapshot of the queue. Every proposal's apply() calls
+     the exact same functions clicks/drags/voice already use.
+  ========================================================= */
+  function splitNarrativeClauses(text){
+    return text.split(/[,;.]|\band\b|\n/i).map(s=>s.trim()).filter(Boolean);
+  }
+
+  function findEmployeeInText(t){
+    const lower = t.toLowerCase();
+    return EMPLOYEES.find(e=>{
+      const nameLower = e.name.toLowerCase();
+      const lastName = nameLower.split(" ").pop();
+      return lower.includes(nameLower) || lower.includes(lastName);
+    });
+  }
+
+  function parseRelativeDate(text){
+    const lower = text.toLowerCase();
+    const atFivePm = (d)=>{ const r = new Date(d); r.setHours(17,0,0,0); return r; };
+    if(/\btoday\b/.test(lower)) return atFivePm(new Date());
+    if(/\btomorrow\b/.test(lower)){
+      const d = new Date(); d.setDate(d.getDate()+1); return atFivePm(d);
+    }
+    const inDays = lower.match(/\bin (\d+) days?\b/);
+    if(inDays){
+      const d = new Date(); d.setDate(d.getDate()+parseInt(inDays[1],10)); return atFivePm(d);
+    }
+    const weekdays = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+    for(let i=0;i<weekdays.length;i++){
+      if(lower.includes(weekdays[i])){
+        const d = new Date();
+        const delta = (i - d.getDay() + 7) % 7;
+        d.setDate(d.getDate()+delta);
+        return atFivePm(d);
+      }
+    }
+    return null;
+  }
+
+  // Checked in priority order — first matching intent wins. Every
+  // returned proposal's apply() is one of the same functions the
+  // click/drag/voice paths already call, so all inputs stay consistent.
+  function parseNarrativeClause(clause){
+    const lower = clause.toLowerCase();
+    const jobId = findJobIdInText(clause);
+    const machine = findMachineInText(clause);
+    const employee = findEmployeeInText(clause);
+
+    if(jobId && /material|arrived|in stock|\bstock\b/.test(lower)){
+      const job = jobsById[jobId];
+      if(job.blocked && job.blockedReason === "material"){
+        return { clauseText:clause, label:`Unblock ${jobId} (material arrived)`, apply(){ unblockJob(job); } };
+      }
+      if(job.materialRisk){
+        return { clauseText:clause, label:`Clear material risk on ${jobId}`, apply(){ job.materialRisk=false; job.materialRiskNote=null; } };
+      }
+      return { clauseText:clause, label:`Noted: material update for ${jobId} (no action needed)`, apply(){} };
+    }
+
+    if(jobId && /pull forward|move up|prioriti[sz]e|urgent/.test(lower)){
+      const job = jobsById[jobId];
+      if(!job.blocked && job.currentOp && job.currentOp.status === "ready"){
+        return { clauseText:clause, label:`Pull forward ${jobId}`, apply(){ pinOpToFront(job); } };
+      }
+      return { clauseText:clause, label:`Can't pull forward ${jobId} — no ready operation right now`, unrecognized:true };
+    }
+
+    if(jobId && /\bblock(ed)?\b|\bhold\b/.test(lower)){
+      const job = jobsById[jobId];
+      const reasonMatch = REASONS.find(r=> lower.includes(r.key.replace("-"," ")));
+      const reason = reasonMatch ? reasonMatch.key : "other";
+      return { clauseText:clause, label:`Block ${jobId} (${reason})`, apply(){ blockJob(job, reason, "Blocked via Compose narrative"); } };
+    }
+
+    if(jobId && /unblock|release|resume/.test(lower)){
+      const job = jobsById[jobId];
+      return { clauseText:clause, label:`Unblock ${jobId}`, apply(){ unblockJob(job); } };
+    }
+
+    if(jobId && machine && /move|reassign|send|switch/.test(lower)){
+      const job = jobsById[jobId];
+      return { clauseText:clause, label:`Reassign ${jobId} to ${machine.name}`, apply(){
+        if(job.currentOp){
+          const result = reassignOpToMachine(job.currentOp, machine.id);
+          if(!result.ok) showToast(result.message, "error");
+        }
+      } };
+    }
+
+    if(machine && !jobId && /down|broken|out of service|offline/.test(lower)){
+      const hoursMatch = lower.match(/(\d+)\s*hours?/);
+      const hours = hoursMatch ? parseInt(hoursMatch[1],10) : null;
+      return { clauseText:clause, label:`${machine.name} down${hours?` for ${hours}h`:""}`, apply(){
+        machine.status = "down";
+        machine.downUntil = hours ? new Date(Date.now()+hours*3600000) : null;
+      } };
+    }
+
+    if(machine && /back up|available|fixed|running again/.test(lower)){
+      return { clauseText:clause, label:`${machine.name} back up`, apply(){ machine.status="running"; machine.downUntil=null; } };
+    }
+
+    if(employee && !jobId && /\bout\b|sick|called in|absent/.test(lower)){
+      return { clauseText:clause, label:`${employee.name} out`, apply(){ employee.status = "out"; } };
+    }
+
+    if(employee && /\bback\b|returning|available/.test(lower)){
+      return { clauseText:clause, label:`${employee.name} back on shift`, apply(){ employee.status = "on-shift"; } };
+    }
+
+    if(jobId && /due|ship|deliver/.test(lower)){
+      const newDate = parseRelativeDate(clause);
+      if(newDate){
+        const job = jobsById[jobId];
+        return { clauseText:clause, label:`Set ${jobId} due ${fmtDateTime(newDate)}`, apply(){ job.dueDate = newDate; } };
+      }
+    }
+
+    if(!jobId && !machine && !employee) return null;
+    return { clauseText:clause, label:`Not sure what to do with: "${clause}"`, unrecognized:true };
+  }
+
+  function parseNarrative(text){
+    return splitNarrativeClauses(text).map(parseNarrativeClause).filter(Boolean);
+  }
+
+  function submitNarrative(){
+    const input = document.getElementById("composeInput");
+    const text = input.value.trim();
+    if(!text) return;
+    state.compose.proposals = parseNarrative(text);
+    input.value = "";
+    input.style.height = "auto";
+    renderComposeCanvasState();
+  }
+
+  function removeProposal(index){
+    state.compose.proposals.splice(index,1);
+    renderComposeCanvasState();
+  }
+
+  function discardProposals(){
+    state.compose.proposals = [];
+    renderComposeCanvasState();
+  }
+
+  function publishQueue(){
+    const applied = state.compose.proposals.filter(p=>!p.unrecognized);
+    applied.forEach(p=>p.apply());
+    recomputeAll();
+    const queueTop = jobs.filter(j=>!j.blocked).slice().sort((a,b)=>a.computedRank-b.computedRank).slice(0,12)
+      .map(j=>({id:j.id, rank:j.computedRank, dueDate:j.dueDate}));
+    state.compose.publishHistory.unshift({
+      id: ++composePublishSeq,
+      timestamp: new Date(),
+      changes: applied.map(p=>p.label),
+      changeCount: applied.length,
+      queueTop,
+    });
+    if(state.compose.publishHistory.length > 20) state.compose.publishHistory.length = 20;
+    state.compose.proposals = [];
+    renderHeaderCounts();
+    renderSharedTicker();
+    renderComposeCanvasState();
+  }
+
+  function renderComposeProposals(){
+    const proposals = state.compose.proposals;
+    if(!proposals.length) return "";
+    const validCount = proposals.filter(p=>!p.unrecognized).length;
+    return `
+      <div class="proposal-review">
+        <div class="proposal-header">
+          <span class="title">${validCount} change${validCount===1?"":"s"} understood</span>
+          <button data-publish-queue ${validCount===0?"disabled":""}>Publish Queue</button>
+          <button class="secondary" data-discard-proposals>Discard</button>
+        </div>
+        <div class="proposal-list">
+          ${proposals.map((p,i)=>`
+            <div class="proposal-card ${p.unrecognized?"unrecognized":""}">
+              <span class="proposal-clause">"${p.clauseText}"</span>
+              <span class="proposal-label">${p.label}</span>
+              ${p.unrecognized ? "" : `<button class="proposal-skip" data-remove-proposal="${i}">Skip</button>`}
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderComposeQueueAndHistory(){
+    if(!state.compose.publishHistory.length) return "";
+    const latest = state.compose.publishHistory[0];
+    const queueRows = latest.queueTop.map(q=>`
+      <div class="drawer-link-row" data-open-type="job" data-open-id="${q.id}">
+        <span class="count-badge">#${q.rank}</span> <span class="jid">${q.id}</span>
+        <span class="rel-sub">${fmtDue(q.dueDate)}</span>
+      </div>
+    `).join("");
+    const historyRows = state.compose.publishHistory.map(entry=>`
+      <div class="publish-entry">
+        <div class="publish-entry-header">
+          <span class="timestamp">${fmtDateTime(entry.timestamp)}</span>
+          <span class="count-badge">${entry.changeCount} change${entry.changeCount===1?"":"s"}</span>
+        </div>
+        <div class="publish-entry-body">
+          ${entry.changes.length ? entry.changes.map(c=>`<div>• ${c}</div>`).join("") : "<div>No changes applied.</div>"}
+        </div>
+      </div>
+    `).join("");
+    return `
+      <div class="compose-queue-block">
+        <h4>Published queue — top ${latest.queueTop.length}</h4>
+        <div class="compose-queue-list">${queueRows}</div>
+      </div>
+      <div class="publish-history-block">
+        <h4>Publish history</h4>
+        <div class="publish-history-list">${historyRows}</div>
+      </div>
+    `;
+  }
+
+  function renderComposeCanvasState(){
+    const canvas = document.getElementById("composeCanvas");
+    const proposalsHtml = renderComposeProposals();
+    const queueHistoryHtml = renderComposeQueueAndHistory();
+    if(!proposalsHtml && !queueHistoryHtml){
+      canvas.innerHTML = `
+        <div class="compose-empty-hint">
+          <div class="hint-title">Describe what's happening on the floor</div>
+          <div>Material arrivals, backlog changes, machine downtime, employee call-outs — type or dictate it below, review the proposed changes, then publish.</div>
+        </div>
+      `;
+      return;
+    }
+    canvas.innerHTML = proposalsHtml + queueHistoryHtml;
+  }
+
+  document.getElementById("composeSendBtn").addEventListener("click", submitNarrative);
+  document.getElementById("composeInput").addEventListener("keydown", e=>{
+    if(e.key === "Enter" && !e.shiftKey){
+      e.preventDefault();
+      submitNarrative();
+    }
+  });
+  document.getElementById("composeInput").addEventListener("input", e=>{
+    e.target.style.height = "auto";
+    e.target.style.height = e.target.scrollHeight + "px";
+  });
+
+  let composeVoiceRecognizer = null;
+  let composeVoiceListening = false;
+  function initComposeVoice(){
+    const btn = document.getElementById("composeMicBtn");
+    if(!SpeechRecognitionCtor){
+      btn.disabled = true;
+      btn.title = "Voice input isn't supported in this browser — try Chrome or Edge.";
+      return;
+    }
+    composeVoiceRecognizer = new SpeechRecognitionCtor();
+    composeVoiceRecognizer.continuous = true;
+    composeVoiceRecognizer.interimResults = true;
+    composeVoiceRecognizer.lang = "en-US";
+    let baseValue = "";
+    composeVoiceRecognizer.onresult = (e)=>{
+      let finalTranscript = "", interim = "";
+      for(let i=0;i<e.results.length;i++){
+        const chunk = e.results[i][0].transcript;
+        if(e.results[i].isFinal) finalTranscript += chunk;
+        else interim += chunk;
+      }
+      const input = document.getElementById("composeInput");
+      input.value = (baseValue + " " + finalTranscript + " " + interim).trim();
+      input.style.height = "auto";
+      input.style.height = input.scrollHeight + "px";
+    };
+    composeVoiceRecognizer.onerror = ()=>{
+      composeVoiceListening = false;
+      btn.classList.remove("listening");
+    };
+    composeVoiceRecognizer.onend = ()=>{
+      composeVoiceListening = false;
+      btn.classList.remove("listening");
+    };
+    btn.addEventListener("click", ()=>{
+      if(composeVoiceListening){ composeVoiceRecognizer.stop(); return; }
+      try{
+        baseValue = document.getElementById("composeInput").value;
+        composeVoiceRecognizer.start();
+        composeVoiceListening = true;
+        btn.classList.add("listening");
+      } catch(err){
+        showToast("Could not start microphone.", "error");
+      }
+    });
+  }
 
   /* =========================================================
      COPILOT MODULE — proactive insights + chat + what-if simulator
@@ -2133,7 +2496,7 @@
         recomputeAll();
         renderDrawer();
         renderExplorerResults();
-        renderExplorerTicker();
+        renderSharedTicker();
         renderHeaderCounts();
       }, ()=>{});
       return;
@@ -2145,13 +2508,22 @@
       recomputeAll();
       renderDrawer();
       renderExplorerResults();
-      renderExplorerTicker();
+      renderSharedTicker();
       renderHeaderCounts();
       return;
     }
 
     const promptBtn = e.target.closest("[data-prompt]");
     if(promptBtn){ submitChatMessage(promptBtn.dataset.prompt); return; }
+
+    const removeProposalBtn = e.target.closest("[data-remove-proposal]");
+    if(removeProposalBtn){ removeProposal(parseInt(removeProposalBtn.dataset.removeProposal,10)); return; }
+
+    const publishBtn = e.target.closest("[data-publish-queue]");
+    if(publishBtn){ publishQueue(); return; }
+
+    const discardBtn = e.target.closest("[data-discard-proposals]");
+    if(discardBtn){ discardProposals(); return; }
   });
 
   /* =========================================================
@@ -2162,23 +2534,28 @@
     if(state.activeTab === "triage"){
       rebuildTriageInbox(); renderTriageStream(); renderTriageDetail();
     } else if(state.activeTab === "explorer"){
-      renderExplorerResults(); renderDrawer(); renderRecentlyViewedTrail(); renderExplorerTicker();
+      renderExplorerResults(); renderDrawer(); renderRecentlyViewedTrail(); renderSharedTicker();
       if(state.explorer.openMachinePopupId) renderMachinePopup(state.explorer.openMachinePopupId);
     } else if(state.activeTab === "copilot"){
       state.copilot.insights = generateInsights();
       renderInsights(); renderCopilotStatRow(); renderSuggestedPrompts();
       populateWhatifMachineSelect(); renderChatLog();
+    } else if(state.activeTab === "compose"){
+      renderSharedTicker(); renderComposeCanvasState();
+      if(state.explorer.openMachinePopupId) renderMachinePopup(state.explorer.openMachinePopupId);
     }
   }
 
   function showTab(name){
     state.activeTab = name;
-    ["triage","explorer","copilot"].forEach(n=>{
+    ["triage","explorer","copilot","compose"].forEach(n=>{
       document.getElementById(n+"View").classList.toggle("hidden", n!==name);
     });
     document.querySelectorAll(".tab-btn").forEach(btn=>{
       btn.classList.toggle("active", btn.dataset.tab === name);
     });
+    document.getElementById("sharedTicker").classList.toggle("hidden", name!=="explorer" && name!=="compose");
+    if(name!=="explorer" && name!=="compose") closeMachinePopup();
     refreshActiveTab();
   }
   document.querySelectorAll(".tab-btn").forEach(btn=>{
@@ -2190,6 +2567,7 @@
   ========================================================= */
   const MAX_FEED_ENTRIES = 200;
   let feedSeq = 0;
+  let composePublishSeq = 0;
   function activeJobPool(){ return jobs.filter(j => !j.blocked); }
 
   const EVENT_BUILDERS = [
@@ -2315,7 +2693,8 @@
   seedInitialBlocks(4);
   recomputeAll();
   initVoice();
-  showTab("triage");
+  initComposeVoice();
+  showTab("compose");
   scheduleNextEvent();
 })();
 </script>
