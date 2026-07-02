@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<!--
+  Scheduling UI — 3 Concept Prototypes (Triage / Explorer / Copilot)
+
+  Three genuinely different takes on the same underlying scheduling data,
+  meant to be clicked through and compared side by side via the tab bar:
+    - Triage:   optimized for ease of scheduling (an inbox of small,
+                fast, single-click decisions instead of a big list).
+    - Explorer: optimized for instant on-demand research (search-first,
+                with a relationship-aware detail drawer).
+    - Copilot:  optimized for AI-enhanced learning (proactive pattern
+                insights + a chat assistant + a what-if simulator).
+
+  All three share one in-memory dataset generated on load, so an action
+  taken in one tab (e.g. blocking a job) is immediately visible from the
+  others.
+
+  KNOWN LIMITATIONS (prototype, not the real build):
+    - Everything is in-memory. Refreshing the page resets all state.
+    - The floor-activity event stream is simulated, not real telemetry.
+    - Copilot's "AI" is entirely simulated: insights are deterministic
+      rules over the real mock data, and the chat responder is a
+      keyword/pattern-matched template engine, not a live language
+      model or any external API call. It says so in its own replies.
+    - No backend, no persistence, no auth.
+    - This is a sibling exploration to prototypes/scheduling-ui-prototype.html
+      (the original 2-tab Priority Queue / Routing & Operations build),
+      which is left untouched.
+
+  Open this file directly in a browser (double-click / file://) — no build
+  step, no server, no external dependencies. Everything is self-contained.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shop Floor Scheduling — Concepts</title>
+<style>
+  :root{
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2128;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --danger: #f85149;
+    --warning: #d29922;
+    --success: #3fb950;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:13px;
+  }
+  .app{height:100vh;display:flex;flex-direction:column;}
+  button{
+    background:var(--panel-2);color:var(--text);border:1px solid var(--border);
+    border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;
+  }
+  button:hover{border-color:var(--accent);}
+  input,select{font-family:inherit;}
+
+  /* ---------- header / tabbar (shared) ---------- */
+  header.toolbar{
+    display:flex;align-items:center;gap:16px;
+    padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  header.toolbar h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.02em;}
+  header.toolbar .clock{color:var(--muted);font-variant-numeric:tabular-nums;}
+  .spacer{flex:1;}
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:3px 10px;border-radius:999px;font-size:11px;
+    border:1px solid var(--border);color:var(--muted);
+  }
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--success);}
+  .pill.live .dot{animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .count-badge{
+    display:inline-block;min-width:18px;text-align:center;padding:1px 6px;border-radius:999px;
+    background:var(--panel-2);border:1px solid var(--border);color:var(--muted);font-size:11px;
+  }
+  nav.tabbar{display:flex;gap:4px;padding:8px 16px 0;background:var(--bg);flex-shrink:0;}
+  .tab-btn{
+    background:transparent;border:1px solid transparent;border-bottom:none;color:var(--muted);
+    padding:9px 18px;border-radius:6px 6px 0 0;font-size:12.5px;cursor:pointer;font-weight:600;
+  }
+  .tab-btn .tab-tagline{display:block;font-size:9.5px;font-weight:400;color:var(--muted);margin-top:1px;}
+  .tab-btn.active{background:var(--panel);color:var(--text);border-color:var(--border);}
+  .hidden{display:none !important;}
+  .concept-view{flex:1;overflow:hidden;min-height:0;display:flex;}
+
+  /* ---------- shared: badges, chips, status dots, modal, jid links ---------- */
+  .badge{
+    font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);
+    display:inline-flex;align-items:center;gap:4px;color:var(--muted);
+  }
+  .badge.risk{color:var(--warning);border-color:var(--warning);}
+  .badge.late{color:var(--danger);border-color:var(--danger);}
+  .status-running,.status-on-shift{color:var(--success);}
+  .status-idle,.status-break{color:var(--warning);}
+  .status-down,.status-out,.status-maintenance,.status-off-shift{color:var(--danger);}
+  .jid{color:var(--accent);cursor:pointer;font-weight:600;}
+  .jid:hover{text-decoration:underline;}
+  .simulated-tag{font-size:9.5px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:2px 8px;white-space:nowrap;}
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(1,4,9,.6);display:flex;align-items:center;
+    justify-content:center;z-index:50;
+  }
+  .modal-box{
+    background:var(--panel);border:1px solid var(--border);border-radius:8px;
+    padding:16px;width:320px;
+  }
+  .modal-box h3{margin:0 0 4px;font-size:13px;}
+  .modal-box p{margin:0 0 12px;color:var(--muted);font-size:12px;}
+  .modal-options{display:flex;flex-direction:column;gap:6px;}
+  .modal-options button{text-align:left;padding:8px 10px;}
+  .modal-cancel{margin-top:12px;width:100%;}
+  .key-cap{display:inline-block;background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;font-family:monospace;margin-right:2px;}
+  .shortcuts-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;font-size:12px;}
+
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+  /* ==================== TRIAGE ==================== */
+  .triage-shell{flex:1;display:grid;grid-template-columns:210px 1fr 320px;gap:12px;padding:12px;min-height:0;}
+  .triage-sidebar{display:flex;flex-direction:column;gap:12px;min-height:0;}
+  .triage-counter{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;}
+  .triage-counter-value{font-size:32px;font-weight:800;color:var(--accent);}
+  .triage-counter-label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:4px;}
+  .triage-filter-list{display:flex;flex-direction:column;gap:4px;}
+  .triage-filter-chip{background:var(--panel-2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:8px 10px;text-align:left;font-size:12px;cursor:pointer;}
+  .triage-filter-chip.active{border-color:var(--accent);color:var(--text);background:rgba(88,166,255,.12);}
+  .triage-shortcuts-btn{background:var(--panel-2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:8px 10px;cursor:pointer;font-size:12px;}
+  .triage-stream-col{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;min-height:0;}
+  .triage-stream-header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;color:var(--muted);flex-shrink:0;}
+  .triage-stream{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;}
+  .triage-detail-col{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-y:auto;}
+  .triage-empty{color:var(--muted);text-align:center;padding:24px;font-size:12px;}
+
+  .triage-card{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:6px;padding:10px 12px;cursor:pointer;transition:opacity .18s ease, transform .18s ease;}
+  .triage-card.selected{border-color:var(--accent);background:rgba(88,166,255,.08);}
+  .triage-card.resolving{opacity:0;transform:translateX(16px);}
+  .triage-card.type-due-no-plan{border-left-color:var(--danger);}
+  .triage-card.type-idle-pullforward{border-left-color:var(--accent);}
+  .triage-card.type-unactioned-suggestion{border-left-color:var(--warning);}
+  .triage-card.type-stale-block{border-left-color:var(--warning);}
+  .triage-card-title{font-weight:700;font-size:13px;}
+  .triage-card-subtitle{color:var(--muted);font-size:11.5px;margin-top:2px;}
+  .triage-card-meta{color:var(--muted);font-size:10.5px;margin-top:4px;}
+  .triage-card-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  .triage-card-actions button{font-size:11px;padding:5px 9px;}
+
+  .triage-detail-sub{color:var(--muted);font-size:12px;margin:4px 0 12px;}
+  .triage-detail-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+  .triage-detail-stats div{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:11px;}
+  .triage-detail-stats span{display:block;color:var(--muted);font-size:10px;}
+  .triage-detail-stats b{font-size:13px;}
+  .triage-detail-routing h4{font-size:11px;color:var(--muted);text-transform:uppercase;margin:0 0 8px;}
+  .triage-detail-step{padding:5px 8px;border-radius:4px;background:var(--panel-2);font-size:11px;margin-bottom:4px;}
+
+  /* ==================== EXPLORER ==================== */
+  .explorer-shell{flex:1;display:flex;overflow:hidden;min-height:0;padding:12px;gap:12px;}
+  .explorer-main{flex:1;display:flex;flex-direction:column;min-width:0;gap:10px;}
+  .explorer-search-bar input{width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:14px;color:var(--text);}
+  .explorer-search-bar input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,.15);}
+  .explorer-recent-trail{display:flex;gap:6px;flex-wrap:wrap;min-height:20px;}
+  .recent-pill{background:var(--panel-2);border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:10.5px;color:var(--muted);cursor:pointer;}
+  .recent-pill:hover{border-color:var(--accent);color:var(--text);}
+  .explorer-toolbar{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--muted);flex-shrink:0;}
+  .explorer-toolbar select{background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:11.5px;margin-left:6px;}
+  .explorer-results{flex:1;overflow-y:auto;}
+  .mini-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-bottom:16px;}
+  .result-section h4{font-size:11px;color:var(--muted);text-transform:uppercase;margin:0 0 8px;}
+  .explorer-mini-card{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:10px;cursor:pointer;font-size:12px;}
+  .explorer-mini-card:hover{border-color:var(--accent);}
+  .mini-card-title{font-weight:700;}
+  .mini-card-sub{color:var(--muted);font-size:11px;margin-top:3px;}
+
+  .explorer-group{margin-bottom:8px;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+  .group-header-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel-2);cursor:pointer;font-size:12px;}
+  .group-header-row .caret{display:inline-block;transition:transform .15s ease;}
+  .group-header-row .caret.collapsed{transform:rotate(-90deg);}
+  .group-body.hidden{display:none;}
+  .explorer-table{width:100%;border-collapse:collapse;font-size:11.5px;}
+  .explorer-table thead th{position:sticky;top:0;background:var(--panel);text-align:left;padding:6px 10px;color:var(--muted);border-bottom:1px solid var(--border);}
+  .explorer-table td{padding:5px 10px;border-bottom:1px solid var(--border);}
+  .explorer-table tr{cursor:pointer;}
+  .explorer-table tr:hover td{background:rgba(88,166,255,.06);}
+
+  .explorer-drawer{width:380px;flex-shrink:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;box-shadow:-4px 0 16px rgba(0,0,0,.3);}
+  .drawer-header{display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .drawer-body{flex:1;overflow-y:auto;padding:14px;}
+  .drawer-sub{color:var(--muted);font-size:12px;margin:4px 0 12px;}
+  .drawer-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+  .drawer-stats div{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:11px;}
+  .drawer-stats span{display:block;color:var(--muted);font-size:10px;}
+  .drawer-stats b{font-size:13px;}
+  .drawer-section{margin-top:16px;}
+  .drawer-section h4{font-size:11px;color:var(--muted);text-transform:uppercase;margin:0 0 8px;}
+  .drawer-routing-row{display:grid;grid-template-columns:44px 1fr 92px 68px;gap:6px;padding:4px 6px;font-size:10.5px;border-radius:4px;}
+  .drawer-routing-row:nth-child(odd){background:var(--panel-2);}
+  .drawer-link-row{padding:6px 8px;border-radius:6px;background:var(--panel-2);border:1px solid var(--border);font-size:11.5px;cursor:pointer;margin-bottom:4px;}
+  .drawer-link-row:hover{border-color:var(--accent);}
+  .drawer-empty{color:var(--muted);font-size:11.5px;}
+  .drawer-blocked{color:var(--danger);font-size:12px;display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .material-risk-note{color:var(--warning);font-size:11px;margin-bottom:10px;}
+
+  /* ==================== COPILOT ==================== */
+  .copilot-shell{flex:1;display:flex;overflow:hidden;min-height:0;padding:12px;gap:12px;}
+  .copilot-overview{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;min-width:0;}
+  .copilot-overview-header{display:flex;align-items:center;gap:10px;}
+  .copilot-overview-header .title{font-weight:700;font-size:13px;}
+  .copilot-stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .stat-tile{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;}
+  .stat-value{display:block;font-size:22px;font-weight:800;}
+  .stat-label{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;margin-top:2px;}
+  .copilot-insight-list{display:flex;flex-direction:column;gap:8px;}
+  .insight-card{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:6px;padding:10px 12px;}
+  .insight-card.sev-danger{border-left-color:var(--danger);}
+  .insight-card.sev-warning{border-left-color:var(--warning);}
+  .insight-card.sev-info{border-left-color:var(--accent);}
+  .insight-title{font-weight:700;font-size:12.5px;}
+  .insight-body{color:var(--muted);font-size:11.5px;margin-top:3px;}
+  .insight-related{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+  .insight-related-chip{background:var(--panel-2);border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:10px;color:var(--accent);cursor:pointer;}
+  .copilot-whatif-panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;}
+  .copilot-whatif-panel h4{margin:0 0 10px;font-size:12px;}
+  #whatifForm{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+  #whatifMachine,#whatifHours{background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12px;}
+  #whatifHours{width:60px;}
+  .whatif-table{width:100%;border-collapse:collapse;font-size:11.5px;}
+  .whatif-table th{text-align:left;color:var(--muted);padding:4px 6px;border-bottom:1px solid var(--border);}
+  .whatif-table td{padding:4px 6px;border-bottom:1px solid var(--border);}
+  .whatif-note{color:var(--muted);font-size:10.5px;margin-top:8px;}
+
+  .copilot-chat{width:400px;flex-shrink:0;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .chat-log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;}
+  .chat-bubble{max-width:88%;padding:8px 12px;border-radius:12px;font-size:12.5px;line-height:1.4;}
+  .chat-bubble.user{align-self:flex-end;background:var(--accent);color:#04101f;border-bottom-right-radius:3px;}
+  .chat-bubble.assistant{align-self:flex-start;background:var(--panel-2);border:1px solid var(--border);border-bottom-left-radius:3px;}
+  .chat-bubble .simulated-tag{display:block;width:fit-content;margin-top:6px;}
+  .chat-suggested-prompts{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px 10px;flex-shrink:0;}
+  .prompt-chip{background:var(--panel-2);border:1px solid var(--border);color:var(--muted);border-radius:999px;padding:5px 10px;font-size:11px;cursor:pointer;}
+  .prompt-chip:hover{border-color:var(--accent);color:var(--text);}
+  .chat-input-form{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border);flex-shrink:0;}
+  .chat-input-form input{flex:1;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="toolbar">
+    <h1>Shop Floor Scheduling — Concepts</h1>
+    <span class="clock" id="clock">--:--:--</span>
+    <span class="spacer"></span>
+    <span class="pill"><span class="dot" style="background:var(--accent)"></span><span id="activeCount">0</span>&nbsp;active</span>
+    <span class="pill"><span class="dot" style="background:var(--danger)"></span><span id="blockedCount">0</span>&nbsp;blocked</span>
+    <span class="pill live"><span class="dot"></span>LIVE SIM</span>
+  </header>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="triage">Triage<span class="tab-tagline">ease of scheduling</span></button>
+    <button class="tab-btn" data-tab="explorer">Explorer<span class="tab-tagline">instant research</span></button>
+    <button class="tab-btn" data-tab="copilot">Copilot<span class="tab-tagline">AI-enhanced learning</span></button>
+  </nav>
+
+  <main class="concept-view" id="triageView">
+    <div class="triage-shell">
+      <aside class="triage-sidebar">
+        <div class="triage-counter">
+          <div class="triage-counter-value" id="triageCounter">0</div>
+          <div class="triage-counter-label">resolved today</div>
+        </div>
+        <div class="triage-filter-list">
+          <button class="triage-filter-chip active" data-filter="all">All</button>
+          <button class="triage-filter-chip" data-filter="due-no-plan">Due &amp; Overdue</button>
+          <button class="triage-filter-chip" data-filter="idle-pullforward">Idle Pull-forward</button>
+          <button class="triage-filter-chip" data-filter="unactioned-suggestion">Suggestions</button>
+          <button class="triage-filter-chip" data-filter="stale-block">Stale Blocks</button>
+        </div>
+        <button class="triage-shortcuts-btn" id="triageShortcutsBtn">⌨ Shortcuts</button>
+      </aside>
+      <section class="triage-stream-col">
+        <div class="triage-stream-header">
+          <span class="title">Inbox</span>
+          <span class="count-badge" id="triageQueueCount">0</span>
+        </div>
+        <div class="triage-stream" id="triageStream"></div>
+      </section>
+      <aside class="triage-detail-col" id="triageDetailCol"></aside>
+    </div>
+    <div class="modal-overlay hidden" id="triageShortcutsOverlay">
+      <div class="modal-box">
+        <h3>Keyboard shortcuts</h3>
+        <div class="shortcuts-list">
+          <div><span class="key-cap">j</span><span class="key-cap">↓</span> Next card</div>
+          <div><span class="key-cap">k</span><span class="key-cap">↑</span> Previous card</div>
+          <div><span class="key-cap">Enter</span> View details</div>
+          <div><span class="key-cap">b</span> Block selected</div>
+          <div><span class="key-cap">p</span> Pull forward selected</div>
+          <div><span class="key-cap">?</span> Toggle this panel</div>
+          <div><span class="key-cap">Esc</span> Close</div>
+        </div>
+        <button class="modal-cancel" id="triageShortcutsClose">Close</button>
+      </div>
+    </div>
+  </main>
+
+  <main class="concept-view hidden" id="explorerView">
+    <div class="explorer-shell">
+      <div class="explorer-main">
+        <div class="explorer-search-bar">
+          <input type="text" id="explorerSearchInput" placeholder="Search jobs, purchase orders, machines, employees…">
+        </div>
+        <div class="explorer-recent-trail" id="explorerRecentTrail"></div>
+        <div class="explorer-toolbar">
+          <span id="explorerResultCount"></span>
+          <label>Group by
+            <select id="explorerGroupBy">
+              <option value="none">None</option>
+              <option value="machine">Machine</option>
+              <option value="po">Purchase Order</option>
+              <option value="customer">Customer</option>
+              <option value="risk">Risk</option>
+            </select>
+          </label>
+        </div>
+        <div class="explorer-results" id="explorerResults"></div>
+      </div>
+      <div class="explorer-drawer hidden" id="explorerDrawer">
+        <div class="drawer-header">
+          <button id="drawerBackBtn">← Back</button>
+          <button id="explorerDrawerClose">✕</button>
+        </div>
+        <div class="drawer-body" id="explorerDrawerBody"></div>
+      </div>
+    </div>
+  </main>
+
+  <main class="concept-view hidden" id="copilotView">
+    <div class="copilot-shell">
+      <div class="copilot-overview">
+        <div class="copilot-overview-header">
+          <span class="title">Overview</span>
+          <span class="simulated-tag">simulated analysis, not a live model</span>
+        </div>
+        <div class="copilot-stat-row" id="copilotStatRow"></div>
+        <div class="copilot-insight-list" id="copilotInsightList"></div>
+        <div class="copilot-whatif-panel">
+          <h4>What-if: machine downtime</h4>
+          <form id="whatifForm">
+            <select id="whatifMachine"></select>
+            <input type="number" id="whatifHours" value="8" min="1" max="72" step="1">
+            <span style="color:var(--muted);font-size:12px;">hours</span>
+            <button type="submit">Simulate</button>
+          </form>
+          <div id="whatifResult"></div>
+        </div>
+      </div>
+      <div class="copilot-chat">
+        <div class="chat-log" id="chatLog"></div>
+        <div class="chat-suggested-prompts" id="chatSuggestedPrompts"></div>
+        <form id="chatInputForm" class="chat-input-form">
+          <input type="text" id="chatInput" placeholder="Ask about your schedule…" autocomplete="off">
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================
+     DATA GENERATION (ported from scheduling-ui-prototype.html)
+  ========================================================= */
+  const PARTS = [
+    "Bracket Assembly, LH","Bracket Assembly, RH","Drive Shaft Coupling","Housing, Gearbox",
+    "Manifold Block","Spindle Adapter","Flange Plate","Pump Impeller","Valve Body",
+    "Bearing Retainer","Mounting Plate","Shaft Collar","Support Bracket","Cover, Inspection",
+    "Hydraulic Fitting","Sensor Bracket","Gasket Carrier","Idler Pulley","Frame Rail","Clamp Ring"
+  ];
+  const CUSTOMERS = ["Acme Robotics","Northfield Industrial","Vantage Aero","Bluewater Marine","Corsair Dynamics","Meridian Fab"];
+
+  const MACHINES = [
+    {id:"m1", name:"CNC-01", status:"running", downUntil:null},
+    {id:"m2", name:"CNC-02", status:"running", downUntil:null},
+    {id:"m3", name:"CNC-03", status:"idle", downUntil:null},
+    {id:"m4", name:"Mill-01", status:"running", downUntil:null},
+    {id:"m5", name:"Lathe-02", status:"idle", downUntil:null},
+    {id:"m6", name:"Saw-01", status:"running", downUntil:null},
+    {id:"m7", name:"Deburr-01", status:"idle", downUntil:null},
+    {id:"m8", name:"Assembly-01", status:"running", downUntil:null},
+    {id:"m9", name:"Inspection-01", status:"idle", downUntil:null},
+    {id:"m10", name:"Outside-Plating", status:"running", downUntil:null},
+  ];
+  const EMPLOYEES = [
+    {id:"e1", name:"T. Alvarez", status:"on-shift"},
+    {id:"e2", name:"K. Nguyen", status:"on-shift"},
+    {id:"e3", name:"R. Patel", status:"on-shift"},
+    {id:"e4", name:"J. Okafor", status:"break"},
+    {id:"e5", name:"M. Sorensen", status:"on-shift"},
+    {id:"e6", name:"D. Wu", status:"off-shift"},
+  ];
+
+  const machinesById = Object.fromEntries(MACHINES.map(m=>[m.id,m]));
+  const employeesById = Object.fromEntries(EMPLOYEES.map(e=>[e.id,e]));
+
+  function rand(min,max){ return min + Math.random()*(max-min); }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  const OP_TEMPLATES = {
+    "Saw":             { pool:["m6"],                  range:[0.25, 1.5] },
+    "CNC Mill":        { pool:["m1","m2","m3","m4"],   range:[0.5, 6] },
+    "CNC Lathe":       { pool:["m5"],                  range:[0.5, 4] },
+    "Deburr":          { pool:["m7"],                  range:[0.2, 1] },
+    "Assembly":        { pool:["m8"],                  range:[0.5, 8] },
+    "Packaging":       { pool:["m8"],                  range:[0.25, 1] },
+    "Inspection":      { pool:["m9"],                  range:[0.2, 0.75] },
+    "Outside Plating": { pool:["m10"],                 range:[24, 96] },
+  };
+  const EARLY_OPS = ["Saw","CNC Mill","CNC Lathe"];
+  const MID_OPS = ["Deburr","Assembly","Outside Plating"];
+  const LATE_OPS = ["Inspection","Packaging"];
+
+  function pickOpType(frac){
+    let pool;
+    if(frac < 0.35) pool = EARLY_OPS.concat(Math.random()<0.2 ? MID_OPS : []);
+    else if(frac < 0.8) pool = MID_OPS.concat(Math.random()<0.3 ? EARLY_OPS : [], Math.random()<0.2 ? LATE_OPS : []);
+    else pool = LATE_OPS.concat(Math.random()<0.15 ? MID_OPS : []);
+    return pick(pool);
+  }
+
+  function pickRoutingLength(){
+    const r = Math.random();
+    if(r < 0.65) return Math.floor(rand(3,15));
+    if(r < 0.92) return Math.floor(rand(15,45));
+    if(r < 0.98) return Math.floor(rand(45,90));
+    return Math.floor(rand(90,160));
+  }
+
+  function buildRouting(jobId, length){
+    const steps = [];
+    for(let i=0;i<length;i++){
+      const frac = length<=1 ? 0 : i/(length-1);
+      const opType = pickOpType(frac);
+      const tmpl = OP_TEMPLATES[opType];
+      steps.push({
+        id: `${jobId}-${String(i+1).padStart(3,"0")}`,
+        jobId, seq: i+1,
+        opType, name: `${opType} — Op ${i+1}`,
+        workCenter: pick(tmpl.pool),
+        durationHours: rand(tmpl.range[0], tmpl.range[1]),
+        status: "pending", blockedReason: null, contentionWarning:false, pinned:false,
+        backwardStart: null, backwardFinish: null,
+        actualStart: null, actualFinish: null,
+        employee: null,
+      });
+    }
+    return steps;
+  }
+
+  function seedProgressState(steps){
+    const progressPoint = Math.floor(rand(0, steps.length));
+    let cursor = new Date(Date.now() - rand(6,240)*3600000);
+    for(let i=0;i<progressPoint;i++){
+      const op = steps[i];
+      op.status = "done";
+      op.actualStart = new Date(cursor);
+      cursor = new Date(cursor.getTime() + op.durationHours*3600000);
+      op.actualFinish = new Date(cursor);
+      op.employee = pick(EMPLOYEES).id;
+    }
+    const current = steps[progressPoint];
+    if(current){
+      if(Math.random() < 0.3){
+        current.status = "in-progress";
+        current.actualStart = new Date(cursor);
+        current.employee = pick(EMPLOYEES).id;
+      } else {
+        current.status = "ready";
+      }
+    }
+  }
+
+  const JOB_COUNT = 90;
+
+  function pickJobsPerPo(){
+    const r = Math.random();
+    if(r < 0.35) return 1;
+    if(r < 0.65) return 2;
+    if(r < 0.85) return 3;
+    if(r < 0.95) return 4;
+    return Math.floor(rand(5,7));
+  }
+  const poSizes = [];
+  {
+    let remaining = JOB_COUNT;
+    while(remaining > 0){
+      const n = Math.min(pickJobsPerPo(), remaining);
+      poSizes.push(n);
+      remaining -= n;
+    }
+  }
+  const purchaseOrders = poSizes.map((n,i) => ({ id: "PO-" + (1001+i), customer: pick(CUSTOMERS), jobIds: [] }));
+
+  const jobs = [];
+  let jobSeq = 0;
+  purchaseOrders.forEach((po,poIdx)=>{
+    for(let k=0;k<poSizes[poIdx];k++){
+      const id = "J-" + (4100 + jobSeq*7);
+      jobSeq++;
+      const routing = buildRouting(id, pickRoutingLength());
+      seedProgressState(routing);
+      const totalRemainingHours = routing.filter(s=>s.status!=="done").reduce((sum,s)=>sum+s.durationHours,0);
+      const dueDate = new Date(Date.now() + totalRemainingHours*rand(0.5,1.6)*3600000 + rand(-24,24)*3600000);
+      const materialRisk = Math.random() < 0.12;
+      const job = {
+        id, part: PARTS[jobSeq % PARTS.length], customer: po.customer, poId: po.id,
+        qty: Math.floor(rand(4,120)),
+        dueDate, routing,
+        materialRisk, materialRiskNote: materialRisk ? "Vendor confirmed tight ETA on raw stock." : null,
+        blocked:false, blockedReason:null, blockedAt:null,
+        computedRank:null, scoreBreakdown:null,
+        currentOp:null, currentOpIndex:null, percentComplete:0, atRiskFlag:"on-track", projectedFinish:null,
+        estRemainingHours: totalRemainingHours,
+        history:[]
+      };
+      jobs.push(job);
+      po.jobIds.push(id);
+    }
+  });
+  const jobsById = Object.fromEntries(jobs.map(j=>[j.id,j]));
+  const posById = Object.fromEntries(purchaseOrders.map(po=>[po.id,po]));
+  const opsById = {};
+  jobs.forEach(job => job.routing.forEach(op => { opsById[op.id] = op; }));
+
+  /* =========================================================
+     STATE
+  ========================================================= */
+  const state = {
+    resourceOrder: {},
+    feed: [],
+    activeTab: "triage",
+    triage: { resolvedToday:0, cursor:0, cards:[], filter:"all", dismissed:new Set(), snoozed:new Map() },
+    explorer: { query:"", groupBy:"none", collapsedGroups:new Set(), drawerEntity:null, drawerHistory:[], recentlyViewed:[] },
+    copilot: { insights:[], chatLog:[], chatSamplePromptJobId:null, whatifResult:null },
+  };
+
+  /* =========================================================
+     SCORING & SCHEDULING (ported, unchanged logic)
+  ========================================================= */
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function hoursUntil(date){ return (date.getTime() - Date.now()) / 3600000; }
+  function hoursSince(date){ return (Date.now() - date.getTime()) / 3600000; }
+
+  function backwardScheduleJob(job){
+    let cursor = job.dueDate;
+    for(let i=job.routing.length-1;i>=0;i--){
+      const op = job.routing[i];
+      if(op.status === "done"){
+        cursor = op.actualFinish || op.backwardFinish || cursor;
+        continue;
+      }
+      op.backwardFinish = cursor;
+      op.backwardStart = new Date(cursor.getTime() - op.durationHours*3600000);
+      cursor = op.backwardStart;
+    }
+  }
+
+  function recomputeReadiness(){
+    jobs.forEach(job=>{
+      job.routing.forEach((op,i)=>{
+        if(op.status !== "pending") return;
+        const prev = job.routing[i-1];
+        if(i===0 || (prev && prev.status==="done")) op.status = "ready";
+      });
+    });
+  }
+
+  function flagContention(){
+    const byMachine = {};
+    jobs.forEach(job=>job.routing.forEach(op=>{
+      op.contentionWarning = false;
+      if(op.status === "done") return;
+      (byMachine[op.workCenter] ||= []).push(op);
+    }));
+    Object.values(byMachine).forEach(list=>{
+      list.sort((a,b)=> a.backwardStart - b.backwardStart);
+      for(let i=0;i<list.length-1;i++){
+        if(list[i].backwardFinish > list[i+1].backwardStart){
+          list[i].contentionWarning = true;
+          list[i+1].contentionWarning = true;
+        }
+      }
+    });
+  }
+
+  function computeSlackHours(job){
+    const nextOp = job.routing.find(op=>op.status!=="done");
+    if(!nextOp) return hoursUntil(job.dueDate);
+    return hoursUntil(nextOp.backwardStart);
+  }
+
+  function recomputeJobAggregates(job){
+    const routing = job.routing;
+    const currentIdx = routing.findIndex(op=>op.status==="ready"||op.status==="in-progress");
+    job.currentOp = currentIdx === -1 ? null : routing[currentIdx];
+    job.currentOpIndex = currentIdx === -1 ? null : currentIdx;
+    const doneHours = routing.filter(op=>op.status==="done").reduce((s,op)=>s+op.durationHours,0);
+    const totalHours = routing.reduce((s,op)=>s+op.durationHours,0);
+    job.percentComplete = totalHours>0 ? clamp((doneHours/totalHours)*100,0,100) : 0;
+    job.estRemainingHours = totalHours - doneHours;
+    const lastOp = routing[routing.length-1];
+    job.projectedFinish = lastOp ? lastOp.backwardFinish : job.dueDate;
+    const paceSlip = computeSlackHours(job);
+    job.atRiskFlag = paceSlip >= 0 ? "on-track" : (paceSlip > -8 ? "at-risk" : "late");
+  }
+
+  function computeScore(job){
+    const op = job.currentOp;
+    const machine = op ? machinesById[op.workCenter] : null;
+    const employee = (op && op.employee) ? employeesById[op.employee] : null;
+    const dueInHours = hoursUntil(job.dueDate);
+    const slackHours = computeSlackHours(job);
+    const urgencyScore = clamp(100 - (slackHours/240)*100, 0, 100);
+
+    let machinePenalty = 0;
+    if(machine){
+      if(machine.status === "down") machinePenalty = 20;
+      else if(machine.status === "maintenance") machinePenalty = 8;
+    }
+    let laborPenalty = 0;
+    if(employee){
+      if((employee.status === "off-shift" || employee.status === "out") && slackHours < 24) laborPenalty = 15;
+      else if(employee.status === "break") laborPenalty = 5;
+    }
+    const materialPenalty = (job.materialRisk && !job.blocked) ? 25 : 0;
+
+    const finalScore = clamp(urgencyScore + machinePenalty + laborPenalty + materialPenalty, 0, 999);
+    return {
+      daysToDue: dueInHours/24, slackHours, urgencyScore,
+      machinePenalty, laborPenalty, materialPenalty, finalScore
+    };
+  }
+
+  function recomputeAll(){
+    recomputeReadiness();
+    jobs.forEach(backwardScheduleJob);
+    flagContention();
+    jobs.forEach(recomputeJobAggregates);
+    jobs.forEach(j => j.scoreBreakdown = computeScore(j));
+    const active = jobs.filter(j=>!j.blocked)
+      .slice()
+      .sort((a,b)=> b.scoreBreakdown.finalScore - a.scoreBreakdown.finalScore
+                 || a.dueDate - b.dueDate
+                 || a.id.localeCompare(b.id));
+    active.forEach((j,i)=> j.computedRank = i+1);
+    jobs.filter(j=>j.blocked).forEach(j=>{ j.computedRank = active.length + 1; });
+  }
+
+  function fmtDue(date){
+    const h = hoursUntil(date);
+    const abs = date.toLocaleDateString(undefined,{month:"short",day:"numeric"});
+    if(h < 0) return `Overdue — was ${abs}`;
+    if(h < 24) return `Due today, ${abs}`;
+    return `Due ${abs} (${Math.round(h/24)}d)`;
+  }
+  function fmtDateTime(date){
+    if(!date) return "—";
+    return date.toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+  }
+
+  /* =========================================================
+     SHARED HELPERS
+  ========================================================= */
+  function initResourceOrder(){
+    MACHINES.forEach(m => { state.resourceOrder[m.id] = []; });
+    jobs.forEach(job=>{
+      const op = job.currentOp;
+      if(job.blocked || !op || op.status !== "ready") return;
+      state.resourceOrder[op.workCenter].push(op.id);
+    });
+    Object.keys(state.resourceOrder).forEach(mid=>{
+      state.resourceOrder[mid].sort((a,b)=> opsById[a].backwardStart - opsById[b].backwardStart);
+    });
+  }
+
+  function removeJobOpFromResourceOrder(job){
+    const op = job.currentOp;
+    if(!op) return;
+    const arr = state.resourceOrder[op.workCenter];
+    if(!arr) return;
+    const i = arr.indexOf(op.id);
+    if(i > -1) arr.splice(i,1);
+  }
+
+  function addJobOpToResourceOrder(job){
+    const op = job.currentOp;
+    if(!op || op.status !== "ready") return;
+    const arr = state.resourceOrder[op.workCenter];
+    if(!arr || arr.includes(op.id)) return;
+    let idx = arr.findIndex(id => opsById[id].backwardStart > op.backwardStart);
+    if(idx === -1) idx = arr.length;
+    arr.splice(idx, 0, op.id);
+  }
+
+  function pinOpToFront(job){
+    const op = job.currentOp;
+    if(!op || op.status !== "ready") return false;
+    op.pinned = true;
+    const arr = state.resourceOrder[op.workCenter];
+    if(arr){
+      const i = arr.indexOf(op.id);
+      if(i > -1){ arr.splice(i,1); arr.unshift(op.id); }
+    }
+    return true;
+  }
+
+  function findPullforwardCandidates(){
+    const candidates = [];
+    MACHINES.forEach(m=>{
+      const arr = state.resourceOrder[m.id] || [];
+      arr.slice(1).forEach(opId => candidates.push({machine:m, opId}));
+    });
+    return candidates;
+  }
+
+  function computeWaitingForMachine(machineId){
+    const waiting = [];
+    jobs.forEach(job=>{
+      if(job.blocked || job.currentOpIndex == null) return;
+      const nextOp = job.routing[job.currentOpIndex + 1];
+      if(nextOp && nextOp.status === "pending" && nextOp.workCenter === machineId){
+        waiting.push({job, nextOp});
+      }
+    });
+    return waiting;
+  }
+
+  function poAggregateStats(po){
+    const poJobs = po.jobIds.map(id=>jobsById[id]);
+    const atRisk = poJobs.filter(j=>j.atRiskFlag!=="on-track").length;
+    const blocked = poJobs.filter(j=>j.blocked).length;
+    const earliestDue = poJobs.reduce((min,j)=> (!min || j.dueDate<min) ? j.dueDate : min, null);
+    return { count: poJobs.length, atRisk, blocked, earliestDue };
+  }
+
+  const REASONS = [
+    {key:"material", label:"Material — waiting on stock/vendor"},
+    {key:"outside-processing", label:"Outside processing — sent out"},
+    {key:"machine-down", label:"Machine down / unavailable"},
+    {key:"other", label:"Other"},
+  ];
+  function openBlockReasonModal(job, onConfirm, onCancel){
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <h3>Block ${job.id}</h3>
+        <p>Why is this job being held?</p>
+        <div class="modal-options">
+          ${REASONS.map(r => `<button data-reason="${r.key}">${r.label}</button>`).join("")}
+        </div>
+        <button class="modal-cancel">Cancel</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", e => {
+      const reasonBtn = e.target.closest("[data-reason]");
+      if(reasonBtn){
+        document.body.removeChild(overlay);
+        onConfirm(reasonBtn.dataset.reason);
+        return;
+      }
+      if(e.target.classList.contains("modal-cancel") || e.target === overlay){
+        document.body.removeChild(overlay);
+        onCancel();
+      }
+    });
+  }
+
+  function blockJob(job, reason, note){
+    job.blocked = true;
+    job.blockedReason = reason;
+    job.blockedAt = new Date();
+    job.history.push({ts:new Date(), actor:"planner", note: note || `Blocked: ${reason}`});
+    removeJobOpFromResourceOrder(job);
+  }
+
+  function unblockJob(job){
+    job.blocked = false;
+    job.blockedReason = null;
+    job.blockedAt = null;
+    job.history.push({ts:new Date(), actor:"planner", note:"Returned to active queue"});
+    addJobOpToResourceOrder(job);
+  }
+
+  function seedInitialBlocks(n){
+    const candidates = jobs.slice().sort(()=>Math.random()-0.5).slice(0, n);
+    candidates.forEach(job=>{
+      blockJob(job, pick(REASONS).key, "Blocked prior to shift start");
+      job.blockedAt = new Date(Date.now() - rand(2,48)*3600000);
+    });
+  }
+
+  function jumpToEntity(type, id){
+    showTab("explorer");
+    openDrawer(type, id);
+  }
+
+  function renderHeaderCounts(){
+    document.getElementById("activeCount").textContent = jobs.filter(j=>!j.blocked).length;
+    document.getElementById("blockedCount").textContent = jobs.filter(j=>j.blocked).length;
+  }
+
+  /* =========================================================
+     TRIAGE MODULE — inbox of small, single-click decisions
+  ========================================================= */
+  const TRIAGE_STALE_BLOCK_HOURS = 4;
+
+  function activeUnblockedJobs(){ return jobs.filter(j => !j.blocked); }
+
+  function isSnoozed(cardId){
+    const until = state.triage.snoozed.get(cardId);
+    return !!(until && until > Date.now());
+  }
+  function snoozeCard(cardId, hours){ state.triage.snoozed.set(cardId, Date.now() + hours*3600000); }
+  function dismissCard(cardId){ state.triage.dismissed.add(cardId); }
+
+  function buildTriageCards(){
+    const cards = [];
+
+    activeUnblockedJobs()
+      .filter(j => hoursUntil(j.dueDate) < 24 && j.atRiskFlag !== "on-track")
+      .sort((a,b)=> a.scoreBreakdown.slackHours - b.scoreBreakdown.slackHours)
+      .forEach(job=>{
+        const cardId = "due-"+job.id;
+        if(state.triage.dismissed.has(cardId) || isSnoozed(cardId)) return;
+        cards.push({ id:cardId, type:"due-no-plan", job,
+          title: `${job.id} — ${job.part}`,
+          subtitle: `${job.customer} · ${fmtDue(job.dueDate)}`,
+          meta: `${job.atRiskFlag==="late"?"Behind pace":"At risk"} · ${job.percentComplete.toFixed(0)}% complete`,
+          actions: [
+            {key:"pullforward", label:"Pull forward", run:(finish)=>{ pinOpToFront(job); finish(true); }},
+            {key:"block", label:"Block", run:(finish)=>{
+              openBlockReasonModal(job, (reason)=>{ blockJob(job, reason, "Blocked from Triage"); finish(true); }, ()=> finish(false));
+            }},
+            {key:"snooze", label:"Snooze 1h", run:(finish)=>{ snoozeCard(cardId, 1); finish(false); }},
+          ]});
+      });
+
+    findPullforwardCandidates().forEach(({machine,opId})=>{
+      const op = opsById[opId];
+      const job = jobsById[op.jobId];
+      if(job.blocked) return;
+      const cardId = "pf-"+opId;
+      if(state.triage.dismissed.has(cardId) || isSnoozed(cardId)) return;
+      cards.push({ id:cardId, type:"idle-pullforward", job,
+        title: `${job.id} — Op ${op.seq} ready on ${machine.name}`,
+        subtitle: `${op.opType} · ${op.durationHours.toFixed(1)}h`,
+        meta: `Queued behind another operation on ${machine.name}`,
+        actions: [
+          {key:"pullforward", label:"Pull forward", run:(finish)=>{
+            const arr = state.resourceOrder[machine.id];
+            const i = arr.indexOf(opId);
+            if(i>-1){ arr.splice(i,1); arr.unshift(opId); }
+            finish(true);
+          }},
+          {key:"dismiss", label:"Dismiss", run:(finish)=>{ dismissCard(cardId); finish(false); }},
+        ]});
+    });
+
+    state.feed.filter(f=>f.suggestion && !f.suggestion.applied).forEach(entry=>{
+      const cardId = "sg-"+entry.id;
+      if(state.triage.dismissed.has(cardId)) return;
+      cards.push({ id:cardId, type:"unactioned-suggestion", feedEntry:entry,
+        title: entry.category.toUpperCase(),
+        subtitle: entry.text.replace(/<[^>]+>/g,""),
+        meta: entry.ts.toLocaleTimeString(),
+        actions: [
+          {key:"apply", label:entry.suggestion.label, run:(finish)=>{ entry.suggestion.applied=true; entry.suggestion.apply(); finish(true); }},
+          {key:"dismiss", label:"Dismiss", run:(finish)=>{ dismissCard(cardId); finish(false); }},
+        ]});
+    });
+
+    jobs.filter(j=>j.blocked && j.blockedAt && hoursSince(j.blockedAt) > TRIAGE_STALE_BLOCK_HOURS)
+      .forEach(job=>{
+        const cardId = "stale-"+job.id;
+        if(state.triage.dismissed.has(cardId)) return;
+        cards.push({ id:cardId, type:"stale-block", job,
+          title: `${job.id} — ${job.part}`,
+          subtitle: `Blocked ${hoursSince(job.blockedAt).toFixed(1)}h ago (${job.blockedReason})`,
+          meta: job.customer,
+          actions: [
+            {key:"unblock", label:"Unblock", run:(finish)=>{ unblockJob(job); finish(true); }},
+            {key:"keep", label:"Keep blocked", run:(finish)=>{ dismissCard(cardId); finish(false); }},
+          ]});
+      });
+
+    return cards;
+  }
+
+  function visibleTriageCards(){
+    const f = state.triage.filter;
+    return f==="all" ? state.triage.cards : state.triage.cards.filter(c=>c.type===f);
+  }
+
+  function rebuildTriageInbox(){
+    state.triage.cards = buildTriageCards();
+    const visible = visibleTriageCards();
+    if(state.triage.cursor >= visible.length) state.triage.cursor = Math.max(0, visible.length-1);
+  }
+
+  function afterTriageAction(resolved){
+    if(resolved) state.triage.resolvedToday++;
+    recomputeAll();
+    rebuildTriageInbox();
+    renderTriageStream();
+    renderTriageDetail();
+    renderHeaderCounts();
+  }
+
+  function resolveTriageCard(card, actionKey){
+    const action = card.actions.find(a=>a.key===actionKey);
+    if(!action) return;
+    const cardEl = document.querySelector(`.triage-card[data-card-id="${CSS.escape(card.id)}"]`);
+    const finish = (resolved)=>{
+      if(cardEl){ cardEl.classList.add("resolving"); setTimeout(()=> afterTriageAction(resolved), 180); }
+      else afterTriageAction(resolved);
+    };
+    action.run(finish);
+  }
+
+  function renderTriageStream(){
+    const streamEl = document.getElementById("triageStream");
+    const cards = visibleTriageCards();
+    streamEl.innerHTML = "";
+    if(!cards.length){
+      streamEl.innerHTML = `<div class="triage-empty">Inbox zero — nothing needs attention right now.</div>`;
+    }
+    cards.forEach((card, idx)=>{
+      const el = document.createElement("div");
+      el.className = "triage-card type-"+card.type + (idx===state.triage.cursor ? " selected":"");
+      el.dataset.cardId = card.id;
+      el.innerHTML = `
+        <div class="triage-card-title">${card.title}</div>
+        <div class="triage-card-subtitle">${card.subtitle}</div>
+        <div class="triage-card-meta">${card.meta}</div>
+        <div class="triage-card-actions">
+          ${card.actions.map(a=>`<button data-card="${card.id}" data-action-key="${a.key}">${a.label}</button>`).join("")}
+        </div>
+      `;
+      el.addEventListener("click", e=>{
+        if(e.target.closest("button")) return;
+        state.triage.cursor = idx;
+        renderTriageStream();
+        renderTriageDetail();
+      });
+      el.querySelectorAll("button[data-action-key]").forEach(btn=>{
+        btn.addEventListener("click", e=>{
+          e.stopPropagation();
+          resolveTriageCard(card, btn.dataset.actionKey);
+        });
+      });
+      streamEl.appendChild(el);
+    });
+    document.getElementById("triageQueueCount").textContent = cards.length;
+    document.getElementById("triageCounter").textContent = state.triage.resolvedToday;
+  }
+
+  function renderTriageDetail(){
+    const detailEl = document.getElementById("triageDetailCol");
+    const cards = visibleTriageCards();
+    const card = cards[state.triage.cursor];
+    if(!card){ detailEl.innerHTML = `<div class="triage-empty">Select a card to see details.</div>`; return; }
+    if(card.job){
+      const job = card.job;
+      const startIdx = job.currentOpIndex ?? 0;
+      const upcoming = job.routing.slice(startIdx, startIdx + 5);
+      detailEl.innerHTML = `
+        <h3>${job.id} — ${job.part}</h3>
+        <p class="triage-detail-sub">${job.customer} · PO <span class="jid" data-open-type="po" data-open-id="${job.poId}">${job.poId}</span> · qty ${job.qty}</p>
+        <div class="triage-detail-stats">
+          <div><span>Due</span><b>${fmtDue(job.dueDate)}</b></div>
+          <div><span>Progress</span><b>${job.percentComplete.toFixed(0)}%</b></div>
+          <div><span>Pace</span><b>${job.atRiskFlag}</b></div>
+          <div><span>Rank</span><b>#${job.computedRank}</b></div>
+        </div>
+        <div class="triage-detail-routing">
+          <h4>Upcoming steps</h4>
+          ${upcoming.map(op=>`<div class="triage-detail-step">Op ${op.seq} · ${op.opType} · ${machinesById[op.workCenter].name} · ${op.status}</div>`).join("")}
+        </div>
+      `;
+    } else if(card.feedEntry){
+      detailEl.innerHTML = `<h3>${card.feedEntry.category.toUpperCase()}</h3><p class="triage-detail-sub">${card.feedEntry.text}</p>`;
+    }
+  }
+
+  function toggleShortcutsOverlay(){ document.getElementById("triageShortcutsOverlay").classList.toggle("hidden"); }
+  function closeShortcutsOverlay(){ document.getElementById("triageShortcutsOverlay").classList.add("hidden"); }
+  document.getElementById("triageShortcutsBtn").addEventListener("click", toggleShortcutsOverlay);
+  document.getElementById("triageShortcutsClose").addEventListener("click", closeShortcutsOverlay);
+
+  document.querySelectorAll(".triage-filter-chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      state.triage.filter = btn.dataset.filter;
+      document.querySelectorAll(".triage-filter-chip").forEach(b=>b.classList.toggle("active", b===btn));
+      state.triage.cursor = 0;
+      renderTriageStream();
+      renderTriageDetail();
+    });
+  });
+
+  document.addEventListener("keydown", e=>{
+    if(state.activeTab !== "triage") return;
+    if(["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)) return;
+    const cards = visibleTriageCards();
+    if(e.key === "j" || e.key === "ArrowDown"){
+      state.triage.cursor = Math.min(cards.length-1, state.triage.cursor+1);
+      renderTriageStream(); renderTriageDetail(); e.preventDefault();
+    } else if(e.key === "k" || e.key === "ArrowUp"){
+      state.triage.cursor = Math.max(0, state.triage.cursor-1);
+      renderTriageStream(); renderTriageDetail(); e.preventDefault();
+    } else if(e.key === "b"){
+      const c = cards[state.triage.cursor]; const a = c && c.actions.find(a=>a.key==="block");
+      if(a) resolveTriageCard(c, "block");
+    } else if(e.key === "p"){
+      const c = cards[state.triage.cursor]; const a = c && c.actions.find(a=>a.key==="pullforward");
+      if(a) resolveTriageCard(c, "pullforward");
+    } else if(e.key === "?"){
+      toggleShortcutsOverlay();
+    } else if(e.key === "Escape"){
+      closeShortcutsOverlay();
+    }
+  });
+
+  /* =========================================================
+     EXPLORER MODULE — search-first, table-second, drawer for depth
+  ========================================================= */
+  function searchEntities(query){
+    const q = query.toLowerCase();
+    const results = [];
+    jobs.forEach(job=>{
+      const hay = `${job.id} ${job.part} ${job.customer} ${job.poId}`.toLowerCase();
+      if(hay.includes(q)){
+        const score = job.id.toLowerCase().startsWith(q) || job.part.toLowerCase().startsWith(q) ? 2 : 1;
+        results.push({type:"job", entity:job, score});
+      }
+    });
+    purchaseOrders.forEach(po=>{
+      const hay = `${po.id} ${po.customer}`.toLowerCase();
+      if(hay.includes(q)) results.push({type:"po", entity:po, score: po.id.toLowerCase().startsWith(q)?2:1});
+    });
+    MACHINES.forEach(m=>{
+      if(m.name.toLowerCase().includes(q)) results.push({type:"machine", entity:m, score:m.name.toLowerCase().startsWith(q)?2:1});
+    });
+    EMPLOYEES.forEach(e=>{
+      if(e.name.toLowerCase().includes(q)) results.push({type:"employee", entity:e, score:e.name.toLowerCase().startsWith(q)?2:1});
+    });
+    return results.sort((a,b)=>b.score-a.score).slice(0,40);
+  }
+
+  function buildExplorerGroups(groupBy){
+    if(groupBy === "none"){
+      return [{key:"all", label:"All Jobs", jobs: jobs.slice().sort((a,b)=>a.dueDate-b.dueDate)}];
+    }
+    const groups = {};
+    jobs.forEach(job=>{
+      let key, label;
+      if(groupBy === "machine"){
+        const m = job.currentOp ? machinesById[job.currentOp.workCenter] : null;
+        key = m ? m.id : "none"; label = m ? m.name : "No current operation";
+      } else if(groupBy === "po"){
+        key = job.poId; label = `${job.poId} — ${job.customer}`;
+      } else if(groupBy === "customer"){
+        key = job.customer; label = job.customer;
+      } else if(groupBy === "risk"){
+        key = job.blocked ? "blocked" : job.atRiskFlag; label = job.blocked ? "blocked" : job.atRiskFlag;
+      }
+      (groups[key] ||= {key,label,jobs:[]}).jobs.push(job);
+    });
+    return Object.values(groups).sort((a,b)=> b.jobs.length - a.jobs.length);
+  }
+
+  function renderMiniCard(r){
+    if(r.type==="job"){
+      const j = r.entity;
+      return `<div class="explorer-mini-card" data-open-type="job" data-open-id="${j.id}">
+        <div class="mini-card-title">${j.id} — ${j.part}</div>
+        <div class="mini-card-sub">${j.customer} · ${fmtDue(j.dueDate)} · ${j.percentComplete.toFixed(0)}%${j.blocked?" · BLOCKED":""}</div>
+      </div>`;
+    }
+    if(r.type==="po"){
+      const po = r.entity; const stats = poAggregateStats(po);
+      return `<div class="explorer-mini-card" data-open-type="po" data-open-id="${po.id}">
+        <div class="mini-card-title">${po.id}</div>
+        <div class="mini-card-sub">${po.customer} · ${stats.count} job${stats.count!==1?"s":""}</div>
+      </div>`;
+    }
+    if(r.type==="machine"){
+      const m = r.entity;
+      return `<div class="explorer-mini-card" data-open-type="machine" data-open-id="${m.id}">
+        <div class="mini-card-title">${m.name}</div>
+        <div class="mini-card-sub">${m.status} · ${(state.resourceOrder[m.id]||[]).length} queued</div>
+      </div>`;
+    }
+    const e = r.entity;
+    return `<div class="explorer-mini-card" data-open-type="employee" data-open-id="${e.id}">
+      <div class="mini-card-title">${e.name}</div>
+      <div class="mini-card-sub">${e.status}</div>
+    </div>`;
+  }
+
+  function renderResultSection(label, items){
+    if(!items.length) return "";
+    return `<div class="result-section"><h4>${label} (${items.length})</h4><div class="mini-card-grid">${items.map(renderMiniCard).join("")}</div></div>`;
+  }
+
+  function renderGroupBlock(group){
+    const collapsed = state.explorer.collapsedGroups.has(group.key);
+    return `
+      <div class="explorer-group">
+        <div class="group-header-row" data-toggle-group="${group.key}">
+          <span class="caret ${collapsed?"collapsed":""}">▾</span>
+          <span class="group-label">${group.label}</span>
+          <span class="count-badge">${group.jobs.length}</span>
+        </div>
+        <div class="group-body ${collapsed?"hidden":""}">
+          <table class="explorer-table">
+            <thead><tr><th>Job</th><th>Part</th><th>Customer</th><th>Due</th><th>%</th><th>Risk</th></tr></thead>
+            <tbody>
+              ${group.jobs.map(j=>`
+                <tr data-open-type="job" data-open-id="${j.id}">
+                  <td>${j.id}</td><td>${j.part}</td><td>${j.customer}</td>
+                  <td>${fmtDue(j.dueDate)}</td><td>${j.percentComplete.toFixed(0)}%</td>
+                  <td>${j.blocked ? "blocked" : j.atRiskFlag}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderExplorerResults(){
+    const resultsEl = document.getElementById("explorerResults");
+    const q = state.explorer.query.trim();
+    if(q){
+      const results = searchEntities(q);
+      const sections = {job:[], po:[], machine:[], employee:[]};
+      results.forEach(r=>sections[r.type].push(r));
+      resultsEl.innerHTML = `
+        <div class="explorer-search-results">
+          ${renderResultSection("Jobs", sections.job)}
+          ${renderResultSection("Purchase Orders", sections.po)}
+          ${renderResultSection("Machines", sections.machine)}
+          ${renderResultSection("Employees", sections.employee)}
+          ${results.length===0 ? `<div class="triage-empty">No matches for "${q}"</div>` : ""}
+        </div>
+      `;
+      document.getElementById("explorerResultCount").textContent = `${results.length} results`;
+    } else {
+      const groups = buildExplorerGroups(state.explorer.groupBy);
+      resultsEl.innerHTML = `<div class="explorer-groups">${groups.map(renderGroupBlock).join("")}</div>`;
+      document.getElementById("explorerResultCount").textContent = `${jobs.length} jobs`;
+    }
+  }
+
+  function renderRecentlyViewedTrail(){
+    const el = document.getElementById("explorerRecentTrail");
+    const rv = state.explorer.recentlyViewed;
+    el.innerHTML = rv.length ? rv.map(r=>`<span class="recent-pill" data-open-type="${r.type}" data-open-id="${r.id}">${r.id}</span>`).join("") : "";
+  }
+
+  function addToRecentlyViewed(type,id){
+    const rv = state.explorer.recentlyViewed;
+    const existingIdx = rv.findIndex(r=>r.type===type && r.id===id);
+    if(existingIdx>-1) rv.splice(existingIdx,1);
+    rv.unshift({type,id});
+    if(rv.length>8) rv.pop();
+    renderRecentlyViewedTrail();
+  }
+
+  function openDrawer(type, id){
+    if(state.explorer.drawerEntity) state.explorer.drawerHistory.push(state.explorer.drawerEntity);
+    state.explorer.drawerEntity = {type, id};
+    addToRecentlyViewed(type, id);
+    document.getElementById("explorerDrawer").classList.remove("hidden");
+    renderDrawer();
+  }
+  function closeDrawer(){
+    document.getElementById("explorerDrawer").classList.add("hidden");
+    state.explorer.drawerEntity = null;
+    state.explorer.drawerHistory = [];
+  }
+  function drawerBack(){
+    const prev = state.explorer.drawerHistory.pop();
+    if(!prev){ closeDrawer(); return; }
+    state.explorer.drawerEntity = prev;
+    renderDrawer();
+  }
+
+  function renderJobDrawer(job){
+    const siblings = job.poId ? posById[job.poId].jobIds.filter(id=>id!==job.id).map(id=>jobsById[id]) : [];
+    const similar = jobs.filter(j=>j.id!==job.id && j.part===job.part).slice(0,5);
+    const routingPreview = job.routing.slice(0, 20);
+    return `
+      <h3>${job.id} — ${job.part}</h3>
+      <p class="drawer-sub">${job.customer} · PO <span class="jid" data-open-type="po" data-open-id="${job.poId}">${job.poId}</span> · qty ${job.qty}</p>
+      ${job.materialRisk ? `<div class="material-risk-note">⚠ Material risk: ${job.materialRiskNote}</div>` : ""}
+      <div class="drawer-stats">
+        <div><span>Due</span><b>${fmtDue(job.dueDate)}</b></div>
+        <div><span>Progress</span><b>${job.percentComplete.toFixed(0)}%</b></div>
+        <div><span>Pace</span><b>${job.atRiskFlag}</b></div>
+        <div><span>Rank</span><b>#${job.computedRank}</b></div>
+        <div><span>Steps</span><b>${job.routing.length}</b></div>
+        <div><span>Score</span><b>${job.scoreBreakdown.finalScore.toFixed(0)}</b></div>
+      </div>
+      ${job.blocked
+        ? `<p class="drawer-blocked">Blocked: ${job.blockedReason} <button data-unblock-job="${job.id}">Unblock</button></p>`
+        : `<button data-block-job="${job.id}">Block this job</button>`}
+      <div class="drawer-section">
+        <h4>Routing (first ${routingPreview.length} of ${job.routing.length})</h4>
+        ${routingPreview.map(op=>`<div class="drawer-routing-row"><span>Op ${op.seq}</span><span>${op.opType}</span><span>${machinesById[op.workCenter].name}</span><span>${op.status}</span></div>`).join("")}
+      </div>
+      ${siblings.length ? `<div class="drawer-section"><h4>PO siblings</h4>${siblings.map(j=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${j.id}">${j.id} — ${j.part}</div>`).join("")}</div>` : ""}
+      ${similar.length ? `<div class="drawer-section"><h4>Similar jobs</h4>${similar.map(j=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${j.id}">${j.id} — ${j.customer}</div>`).join("")}</div>` : ""}
+    `;
+  }
+
+  function renderMachineDrawer(m){
+    const queue = (state.resourceOrder[m.id]||[]).map(id=>opsById[id]);
+    const waiting = computeWaitingForMachine(m.id);
+    const running = jobs.filter(j=>!j.blocked && j.currentOp && j.currentOp.status==="in-progress" && j.currentOp.workCenter===m.id);
+    return `
+      <h3>${m.name}</h3>
+      <p class="drawer-sub">Status: ${m.status}</p>
+      <div class="drawer-section"><h4>Running</h4>
+        ${running.length ? running.map(j=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${j.id}">${j.id} · Op ${j.currentOp.seq}</div>`).join("") : `<p class="drawer-empty">Idle</p>`}
+      </div>
+      <div class="drawer-section"><h4>Ready queue (${queue.length})</h4>
+        ${queue.length ? queue.map((op,i)=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${op.jobId}">${i+1}. ${op.jobId} — Op ${op.seq} · ${op.opType}</div>`).join("") : `<p class="drawer-empty">No ready operations</p>`}
+      </div>
+      <div class="drawer-section"><h4>Waiting on predecessor (${waiting.length})</h4>
+        ${waiting.length ? waiting.map(({job,nextOp})=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${job.id}">${job.id} — Op ${nextOp.seq} (waiting on Op ${job.currentOp.seq})</div>`).join("") : `<p class="drawer-empty">Nothing queued behind current work</p>`}
+      </div>
+    `;
+  }
+
+  function renderPoDrawer(po){
+    const stats = poAggregateStats(po);
+    const poJobs = po.jobIds.map(id=>jobsById[id]);
+    return `
+      <h3>${po.id}</h3>
+      <p class="drawer-sub">${po.customer}</p>
+      <div class="drawer-stats">
+        <div><span>Jobs</span><b>${stats.count}</b></div>
+        <div><span>At risk</span><b>${stats.atRisk}</b></div>
+        <div><span>Blocked</span><b>${stats.blocked}</b></div>
+        <div><span>Earliest due</span><b>${stats.earliestDue ? fmtDue(stats.earliestDue) : "—"}</b></div>
+      </div>
+      <div class="drawer-section"><h4>Jobs</h4>
+        ${poJobs.map(j=>`<div class="drawer-link-row" data-open-type="job" data-open-id="${j.id}">${j.id} — ${j.part} · ${j.percentComplete.toFixed(0)}% · ${j.blocked?"BLOCKED":j.atRiskFlag}</div>`).join("")}
+      </div>
+    `;
+  }
+
+  function renderEmployeeDrawer(e){
+    const currentJob = jobs.find(j=>!j.blocked && j.currentOp && j.currentOp.employee===e.id && j.currentOp.status==="in-progress");
+    return `
+      <h3>${e.name}</h3>
+      <p class="drawer-sub">Status: ${e.status}</p>
+      ${currentJob ? `<div class="drawer-link-row" data-open-type="job" data-open-id="${currentJob.id}">Currently on ${currentJob.id} — Op ${currentJob.currentOp.seq}</div>` : `<p class="drawer-empty">Not currently assigned to an in-progress operation</p>`}
+    `;
+  }
+
+  function renderDrawer(){
+    const bodyEl = document.getElementById("explorerDrawerBody");
+    const entity = state.explorer.drawerEntity;
+    if(!entity){ bodyEl.innerHTML = ""; return; }
+    if(entity.type === "job") bodyEl.innerHTML = renderJobDrawer(jobsById[entity.id]);
+    else if(entity.type === "po") bodyEl.innerHTML = renderPoDrawer(posById[entity.id]);
+    else if(entity.type === "machine") bodyEl.innerHTML = renderMachineDrawer(machinesById[entity.id]);
+    else if(entity.type === "employee") bodyEl.innerHTML = renderEmployeeDrawer(employeesById[entity.id]);
+    document.getElementById("drawerBackBtn").style.visibility = state.explorer.drawerHistory.length ? "visible":"hidden";
+  }
+
+  document.getElementById("explorerSearchInput").addEventListener("input", e=>{
+    state.explorer.query = e.target.value;
+    renderExplorerResults();
+  });
+  document.getElementById("explorerGroupBy").addEventListener("change", e=>{
+    state.explorer.groupBy = e.target.value;
+    renderExplorerResults();
+  });
+  document.getElementById("drawerBackBtn").addEventListener("click", drawerBack);
+  document.getElementById("explorerDrawerClose").addEventListener("click", closeDrawer);
+
+  /* =========================================================
+     COPILOT MODULE — proactive insights + chat + what-if simulator
+     All "AI" here is deterministic: rule-based insight generation and
+     a keyword/pattern-matched response template engine over the real
+     mock data. No external API calls, no live model.
+  ========================================================= */
+  function generateInsights(){
+    const insights = [];
+
+    const byCustomer = {};
+    jobs.forEach(j=>{ (byCustomer[j.customer] ||= []).push(j); });
+    Object.entries(byCustomer).forEach(([customer, list])=>{
+      const atRisk = list.filter(j=>j.atRiskFlag!=="on-track");
+      if(atRisk.length >= 3){
+        insights.push({ id:"cust-"+customer, severity:"warning",
+          title: `${atRisk.length} jobs from ${customer} are behind pace`,
+          body: atRisk.slice(0,5).map(j=>j.id).join(", "),
+          related: atRisk.slice(0,5).map(j=>({type:"job", id:j.id})) });
+      }
+    });
+
+    const contentionByMachine = {};
+    jobs.forEach(job=>job.routing.forEach(op=>{
+      if(op.contentionWarning) (contentionByMachine[op.workCenter] ||= []).push({job,op});
+    }));
+    let topContended = null;
+    Object.entries(contentionByMachine).forEach(([mid, list])=>{
+      if(!topContended || list.length > topContended.list.length) topContended = {mid, list};
+    });
+    if(topContended){
+      const m = machinesById[topContended.mid];
+      const uniqueJobs = [...new Map(topContended.list.map(({job})=>[job.id,job])).values()];
+      insights.push({ id:"contention-"+topContended.mid, severity:"danger",
+        title: `${m.name} is this week's most contended work center`,
+        body: `${topContended.list.length} overlapping operations flagged across ${uniqueJobs.length} jobs`,
+        related: uniqueJobs.slice(0,3).map(job=>({type:"job", id:job.id})) });
+    }
+
+    const hoursByOpType = {};
+    jobs.forEach(job=>job.routing.forEach(op=>{
+      if(op.status==="done") return;
+      hoursByOpType[op.opType] = (hoursByOpType[op.opType]||0) + op.durationHours;
+    }));
+    const topOpType = Object.entries(hoursByOpType).sort((a,b)=>b[1]-a[1])[0];
+    if(topOpType){
+      insights.push({ id:"optype-load", severity:"info",
+        title: `${topOpType[0]} accounts for the most remaining work`,
+        body: `${topOpType[1].toFixed(0)}h remaining across the floor`,
+        related: [] });
+    }
+
+    const byReason = {};
+    jobs.filter(j=>j.blocked).forEach(j=>{ (byReason[j.blockedReason]||=[]).push(j); });
+    Object.entries(byReason).forEach(([reason, list])=>{
+      if(list.length >= 2){
+        insights.push({ id:"blocked-"+reason, severity:"warning",
+          title: `${list.length} jobs are blocked on ${reason}`,
+          body: list.map(j=>j.id).join(", "),
+          related: list.slice(0,5).map(j=>({type:"job", id:j.id})) });
+      }
+    });
+
+    const blockedJobs = jobs.filter(j=>j.blocked && j.blockedAt);
+    if(blockedJobs.length){
+      const oldest = blockedJobs.reduce((a,b)=> hoursSince(a.blockedAt) > hoursSince(b.blockedAt) ? a : b);
+      if(hoursSince(oldest.blockedAt) > 4){
+        insights.push({ id:"stale-"+oldest.id, severity:"danger",
+          title: `${oldest.id} has been blocked ${hoursSince(oldest.blockedAt).toFixed(1)}h — longest-waiting right now`,
+          body: `Reason: ${oldest.blockedReason}`,
+          related: [{type:"job", id:oldest.id}] });
+      }
+    }
+
+    let deepest = null;
+    MACHINES.forEach(m=>{
+      const len = (state.resourceOrder[m.id]||[]).length;
+      if(len >= 5 && (!deepest || len > deepest.len)) deepest = {m, len};
+    });
+    if(deepest){
+      insights.push({ id:"deepqueue-"+deepest.m.id, severity:"info",
+        title: `${deepest.m.name} has ${deepest.len} operations queued`,
+        body: `The deepest backlog on the floor right now`,
+        related: [{type:"machine", id:deepest.m.id}] });
+    }
+
+    const sevOrder = {danger:0, warning:1, info:2};
+    insights.sort((a,b)=> sevOrder[a.severity]-sevOrder[b.severity]);
+    return insights;
+  }
+
+  function findJobFromText(t){
+    const m = t.match(/\bJ-?\d{3,5}\b/i);
+    if(!m) return null;
+    let id = m[0].toUpperCase();
+    if(!id.startsWith("J-")) id = "J-"+id.slice(1);
+    return jobsById[id] || null;
+  }
+
+  function respondToChat(text){
+    const lower = text.toLowerCase();
+    const job = findJobFromText(text);
+
+    if(job && /why|priorit|score|explain/.test(lower)){
+      const sb = job.scoreBreakdown;
+      const top = [
+        {label:"urgency", val:sb.urgencyScore},
+        {label:"machine penalty", val:sb.machinePenalty},
+        {label:"labor penalty", val:sb.laborPenalty},
+        {label:"material penalty", val:sb.materialPenalty},
+      ].sort((a,b)=>b.val-a.val)[0];
+      const activeCount = jobs.filter(j=>!j.blocked).length;
+      const stepDesc = job.currentOp ? `${job.currentOp.opType} at ${machinesById[job.currentOp.workCenter].name}` : "no active step";
+      if(job.blocked){
+        return `${job.id} is currently BLOCKED (${job.blockedReason}), so it's held out of the active ranking. If unblocked, its score would be ${sb.finalScore.toFixed(0)} — driven mostly by ${top.label} (${top.val.toFixed(0)}). Due ${fmtDue(job.dueDate)}, ${sb.slackHours.toFixed(1)}h pace slack on ${stepDesc}.`;
+      }
+      return `${job.id} is ranked #${job.computedRank} of ${activeCount} active jobs. Score ${sb.finalScore.toFixed(0)} — driven mostly by ${top.label} (${top.val.toFixed(0)}). Due ${fmtDue(job.dueDate)}, currently ${job.atRiskFlag}, ${sb.slackHours.toFixed(1)}h pace slack on ${stepDesc}.`;
+    }
+    if(job){
+      return `${job.id} (${job.part}) is ${job.percentComplete.toFixed(0)}% complete, ${fmtDue(job.dueDate)}, currently ${job.atRiskFlag}${job.blocked ? `, BLOCKED on ${job.blockedReason}`:""}. Current step: ${job.currentOp ? `Op ${job.currentOp.seq} — ${job.currentOp.opType}` : "none"}.`;
+    }
+
+    if(/at risk|behind|this week/.test(lower)){
+      const risky = jobs.filter(j=>!j.blocked && hoursUntil(j.dueDate) <= 24*7 && j.atRiskFlag!=="on-track")
+        .sort((a,b)=>a.scoreBreakdown.slackHours-b.scoreBreakdown.slackHours).slice(0,5);
+      if(!risky.length) return "Nothing due this week looks at risk right now — the schedule is holding.";
+      return `${risky.length} jobs due within a week are behind pace: ${risky.map(j=>j.id).join(", ")}.`;
+    }
+
+    if(/bottleneck|which machine|contention/.test(lower)){
+      const insights = generateInsights();
+      const c = insights.find(i=>i.id.startsWith("contention-"));
+      if(c) return c.title + ". " + c.body;
+      const deep = insights.find(i=>i.id.startsWith("deepqueue-"));
+      if(deep) return deep.title + ". " + deep.body;
+      return "No machine looks especially contended right now.";
+    }
+
+    if(/blocked|blocker/.test(lower)){
+      const blocked = jobs.filter(j=>j.blocked);
+      if(!blocked.length) return "No jobs are currently blocked.";
+      const byReason = {};
+      blocked.forEach(j=>{ (byReason[j.blockedReason]||=[]).push(j.id); });
+      return Object.entries(byReason).map(([reason,ids])=>`${ids.length} blocked on ${reason} (${ids.join(", ")})`).join("; ");
+    }
+
+    const customerMatch = CUSTOMERS.find(c=>lower.includes(c.toLowerCase()));
+    if(customerMatch){
+      const list = jobs.filter(j=>j.customer===customerMatch);
+      const atRisk = list.filter(j=>j.atRiskFlag!=="on-track").length;
+      const blocked = list.filter(j=>j.blocked).length;
+      const earliest = list.reduce((min,j)=> (!min||j.dueDate<min) ? j.dueDate : min, null);
+      return `${customerMatch} has ${list.length} jobs — ${atRisk} at risk, ${blocked} blocked. Earliest due ${fmtDue(earliest)}.`;
+    }
+
+    const machineMatch = MACHINES.find(m=>lower.includes(m.name.toLowerCase()));
+    if(machineMatch){
+      const queue = state.resourceOrder[machineMatch.id]||[];
+      const running = jobs.filter(j=>!j.blocked && j.currentOp && j.currentOp.status==="in-progress" && j.currentOp.workCenter===machineMatch.id);
+      return `${machineMatch.name} is ${machineMatch.status}. ${queue.length} ops ready and queued${running.length? `, currently running ${running.map(j=>j.id).join(", ")}`:""}.`;
+    }
+
+    return `I'm a simulated assistant — I pattern-match your question against the real schedule data and fill in a template, not a live language model. Try asking about a job id, "what's at risk this week", "which machine is the bottleneck", or a customer/machine name.`;
+  }
+
+  function pickSampleJobForPrompt(){
+    const candidates = jobs.filter(j=>!j.blocked && j.atRiskFlag!=="on-track");
+    return candidates.length ? pick(candidates).id : (jobs[0] ? jobs[0].id : "");
+  }
+
+  function renderSuggestedPrompts(){
+    if(!state.copilot.chatSamplePromptJobId) state.copilot.chatSamplePromptJobId = pickSampleJobForPrompt();
+    const jobId = state.copilot.chatSamplePromptJobId;
+    const prompts = ["What's at risk this week?", "Which machine is the bottleneck?", `Explain ${jobId}'s priority`];
+    document.getElementById("chatSuggestedPrompts").innerHTML = prompts.map(p=>`<button class="prompt-chip" data-prompt="${p}">${p}</button>`).join("");
+  }
+
+  function submitChatMessage(text){
+    if(!text.trim()) return;
+    state.copilot.chatLog.push({role:"user", text});
+    const response = respondToChat(text);
+    state.copilot.chatLog.push({role:"assistant", text: response});
+    renderChatLog();
+  }
+
+  function renderChatLog(){
+    const logEl = document.getElementById("chatLog");
+    if(!state.copilot.chatLog.length){
+      logEl.innerHTML = `<div class="chat-bubble assistant">Ask me anything about the current schedule — a job id, a customer, a machine, or something like "what's at risk this week?"<span class="simulated-tag">simulated</span></div>`;
+      return;
+    }
+    logEl.innerHTML = state.copilot.chatLog.map(m=>`
+      <div class="chat-bubble ${m.role}">${m.text}${m.role==="assistant" ? '<span class="simulated-tag">simulated</span>' : ""}</div>
+    `).join("");
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function renderInsights(){
+    const listEl = document.getElementById("copilotInsightList");
+    const insights = state.copilot.insights;
+    listEl.innerHTML = insights.length ? insights.map(ins=>`
+      <div class="insight-card sev-${ins.severity}">
+        <div class="insight-title">${ins.title}</div>
+        <div class="insight-body">${ins.body}</div>
+        ${ins.related.length ? `<div class="insight-related">${ins.related.map(r=>`<span class="insight-related-chip" data-open-type="${r.type}" data-open-id="${r.id}">${r.id}</span>`).join("")}</div>` : ""}
+      </div>
+    `).join("") : `<div class="triage-empty">No notable patterns detected right now.</div>`;
+  }
+
+  function renderCopilotStatRow(){
+    const active = jobs.filter(j=>!j.blocked);
+    const onTrack = active.filter(j=>j.atRiskFlag==="on-track").length;
+    const atRisk = active.filter(j=>j.atRiskFlag==="at-risk").length;
+    const late = active.filter(j=>j.atRiskFlag==="late").length;
+    const blocked = jobs.filter(j=>j.blocked).length;
+    document.getElementById("copilotStatRow").innerHTML = `
+      <div class="stat-tile"><span class="stat-value">${onTrack}</span><span class="stat-label">On track</span></div>
+      <div class="stat-tile"><span class="stat-value">${atRisk}</span><span class="stat-label">At risk</span></div>
+      <div class="stat-tile"><span class="stat-value">${late}</span><span class="stat-label">Late</span></div>
+      <div class="stat-tile"><span class="stat-value">${blocked}</span><span class="stat-label">Blocked</span></div>
+    `;
+  }
+
+  function cloneRoutingForWhatIf(routing){
+    return routing.map(op=>({...op,
+      backwardStart: op.backwardStart ? new Date(op.backwardStart.getTime()) : null,
+      backwardFinish: op.backwardFinish ? new Date(op.backwardFinish.getTime()) : null,
+      actualStart: op.actualStart ? new Date(op.actualStart.getTime()) : null,
+      actualFinish: op.actualFinish ? new Date(op.actualFinish.getTime()) : null,
+    }));
+  }
+
+  function runWhatIf(machineId, hours){
+    const affected = jobs.filter(j=> j.routing.some(op=>op.workCenter===machineId && op.status!=="done"));
+    if(!affected.length){ state.copilot.whatifResult = []; renderWhatIf(); return; }
+    const results = affected.map(job=>{
+      const clonedRouting = cloneRoutingForWhatIf(job.routing);
+      const clone = {...job, routing: clonedRouting};
+      const firstIncompleteOnMachine = clonedRouting.find(op=>op.workCenter===machineId && op.status!=="done");
+      if(firstIncompleteOnMachine) firstIncompleteOnMachine.durationHours += hours;
+      backwardScheduleJob(clone);
+      const originalFirstStart = job.routing.find(op=>op.status!=="done")?.backwardStart;
+      const newFirstStart = clonedRouting.find(op=>op.status!=="done")?.backwardStart;
+      const shiftHours = (originalFirstStart && newFirstStart) ? Math.abs((originalFirstStart.getTime()-newFirstStart.getTime())/3600000) : 0;
+      const wouldBeLate = newFirstStart ? hoursUntil(newFirstStart) < 0 : false;
+      return { job, shiftHours, wouldBeLate };
+    }).sort((a,b)=>b.shiftHours-a.shiftHours);
+    state.copilot.whatifResult = results;
+    renderWhatIf();
+  }
+
+  function renderWhatIf(){
+    const resultEl = document.getElementById("whatifResult");
+    const results = state.copilot.whatifResult;
+    if(results === null){ resultEl.innerHTML = ""; return; }
+    if(!results.length){ resultEl.innerHTML = `<div class="triage-empty">No incomplete operations on this machine — nothing to simulate.</div>`; return; }
+    resultEl.innerHTML = `
+      <table class="whatif-table">
+        <thead><tr><th>Job</th><th>Shift</th><th>Status</th></tr></thead>
+        <tbody>
+          ${results.map(r=>`<tr><td><span class="jid" data-open-type="job" data-open-id="${r.job.id}">${r.job.id}</span></td><td>${r.shiftHours.toFixed(1)}h</td><td>${r.wouldBeLate ? '<span class="badge late">behind pace</span>':'<span class="badge">ok</span>'}</td></tr>`).join("")}
+        </tbody>
+      </table>
+      <p class="whatif-note">Simulation only — does not change the live schedule.</p>
+    `;
+  }
+
+  function populateWhatifMachineSelect(){
+    const sel = document.getElementById("whatifMachine");
+    if(sel.options.length) return;
+    sel.innerHTML = MACHINES.map(m=>`<option value="${m.id}">${m.name}</option>`).join("");
+  }
+
+  document.getElementById("whatifForm").addEventListener("submit", e=>{
+    e.preventDefault();
+    const machineId = document.getElementById("whatifMachine").value;
+    const hours = parseFloat(document.getElementById("whatifHours").value) || 0;
+    runWhatIf(machineId, hours);
+  });
+  document.getElementById("chatInputForm").addEventListener("submit", e=>{
+    e.preventDefault();
+    const input = document.getElementById("chatInput");
+    submitChatMessage(input.value);
+    input.value = "";
+  });
+
+  /* =========================================================
+     GLOBAL CLICK DELEGATION (entity links, block/unblock, prompts, groups)
+  ========================================================= */
+  document.addEventListener("click", e => {
+    const openTarget = e.target.closest("[data-open-type]");
+    if(openTarget){ jumpToEntity(openTarget.dataset.openType, openTarget.dataset.openId); return; }
+
+    const groupToggle = e.target.closest("[data-toggle-group]");
+    if(groupToggle){
+      const key = groupToggle.dataset.toggleGroup;
+      if(state.explorer.collapsedGroups.has(key)) state.explorer.collapsedGroups.delete(key);
+      else state.explorer.collapsedGroups.add(key);
+      renderExplorerResults();
+      return;
+    }
+
+    const blockBtn = e.target.closest("[data-block-job]");
+    if(blockBtn){
+      const job = jobsById[blockBtn.dataset.blockJob];
+      openBlockReasonModal(job, (reason)=>{
+        blockJob(job, reason, "Blocked from Explorer");
+        recomputeAll();
+        renderDrawer();
+        renderExplorerResults();
+        renderHeaderCounts();
+      }, ()=>{});
+      return;
+    }
+    const unblockBtn = e.target.closest("[data-unblock-job]");
+    if(unblockBtn){
+      const job = jobsById[unblockBtn.dataset.unblockJob];
+      unblockJob(job);
+      recomputeAll();
+      renderDrawer();
+      renderExplorerResults();
+      renderHeaderCounts();
+      return;
+    }
+
+    const promptBtn = e.target.closest("[data-prompt]");
+    if(promptBtn){ submitChatMessage(promptBtn.dataset.prompt); return; }
+  });
+
+  /* =========================================================
+     TAB SWITCHING
+  ========================================================= */
+  function refreshActiveTab(){
+    renderHeaderCounts();
+    if(state.activeTab === "triage"){
+      rebuildTriageInbox(); renderTriageStream(); renderTriageDetail();
+    } else if(state.activeTab === "explorer"){
+      renderExplorerResults(); renderDrawer(); renderRecentlyViewedTrail();
+    } else if(state.activeTab === "copilot"){
+      state.copilot.insights = generateInsights();
+      renderInsights(); renderCopilotStatRow(); renderSuggestedPrompts();
+      populateWhatifMachineSelect(); renderChatLog();
+    }
+  }
+
+  function showTab(name){
+    state.activeTab = name;
+    ["triage","explorer","copilot"].forEach(n=>{
+      document.getElementById(n+"View").classList.toggle("hidden", n!==name);
+    });
+    document.querySelectorAll(".tab-btn").forEach(btn=>{
+      btn.classList.toggle("active", btn.dataset.tab === name);
+    });
+    refreshActiveTab();
+  }
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=> showTab(btn.dataset.tab));
+  });
+
+  /* =========================================================
+     FLOOR ACTIVITY (simulated realtime engine, ported)
+  ========================================================= */
+  const MAX_FEED_ENTRIES = 200;
+  let feedSeq = 0;
+  function activeJobPool(){ return jobs.filter(j => !j.blocked); }
+
+  const EVENT_BUILDERS = [
+    {
+      category: "material",
+      build(){
+        const pool = activeJobPool();
+        if(!pool.length) return null;
+        const job = pick(pool);
+        const days = Math.floor(rand(1,4));
+        return {
+          jobId: job.id,
+          text: `Voice note from receiving: material delay reported for ${job.part} (${job.id}) — vendor ETA slipped ${days} day${days>1?"s":""}.`,
+          suggestion: {label:"Move to Blocked", applied:false, apply(){
+            blockJob(job, "material", "Material delay reported via floor update");
+          }}
+        };
+      }
+    },
+    {
+      category: "labor",
+      build(){
+        const pool = activeJobPool().filter(j=>j.currentOp && j.currentOp.employee);
+        if(!pool.length) return null;
+        const job = pick(pool);
+        const employee = employeesById[job.currentOp.employee];
+        return {
+          jobId: job.id,
+          text: `${employee.name} called out sick — coverage needed for ${job.id} (Op ${job.currentOp.seq}).`,
+          autoApply(){ employee.status = "out"; }
+        };
+      }
+    },
+    {
+      category: "speedup",
+      build(){
+        const pool = activeJobPool().filter(j=>j.currentOp && j.currentOp.status==="in-progress");
+        if(!pool.length) return null;
+        const job = pick(pool);
+        const op = job.currentOp;
+        return {
+          jobId: job.id,
+          text: `Operator finished ${op.opType} early on ${job.id} (Op ${op.seq}) — remaining time trimmed.`,
+          autoApply(){ op.durationHours = Math.max(0.25, op.durationHours * 0.6); }
+        };
+      }
+    },
+    {
+      category: "machine",
+      build(){
+        const machine = pick(MACHINES);
+        return {
+          jobId: null,
+          text: `${machine.name} flagged down for unplanned maintenance.`,
+          autoApply(){ machine.status = "down"; machine.downUntil = new Date(Date.now()+2*3600000); }
+        };
+      }
+    },
+    {
+      category: "pullforward",
+      build(){
+        const candidates = findPullforwardCandidates();
+        if(!candidates.length) return null;
+        const choice = pick(candidates);
+        const op = opsById[choice.opId];
+        const job = jobsById[op.jobId];
+        return {
+          jobId: job.id,
+          text: `${choice.machine.name} will free up soon — Op ${op.seq} of ${job.id} is ready and could jump the queue.`,
+          suggestion: {label:"Pull forward", applied:false, apply(){
+            const arr = state.resourceOrder[choice.machine.id];
+            const idx = arr.indexOf(op.id);
+            if(idx > -1){ arr.splice(idx,1); arr.unshift(op.id); }
+          }}
+        };
+      }
+    },
+    {
+      category: "info",
+      build(){
+        const pool = jobs.filter(j=>!j.blocked);
+        if(!pool.length) return null;
+        const job = pick(pool);
+        return { jobId: job.id, text: `QA sign-off complete on ${job.id}.` };
+      }
+    },
+  ];
+
+  function generateFloorEvent(){
+    const builder = pick(EVENT_BUILDERS);
+    const payload = builder.build();
+    if(!payload) return;
+    if(payload.autoApply) payload.autoApply();
+    const entry = {
+      id: "ev" + (++feedSeq), ts: new Date(), category: builder.category,
+      jobId: payload.jobId, text: payload.text, suggestion: payload.suggestion || null,
+    };
+    state.feed.push(entry);
+    if(state.feed.length > MAX_FEED_ENTRIES) state.feed.shift();
+    recomputeAll();
+    refreshActiveTab();
+  }
+
+  /* =========================================================
+     TIMERS
+  ========================================================= */
+  function tickClock(){ document.getElementById("clock").textContent = new Date().toLocaleTimeString(); }
+  setInterval(tickClock, 1000);
+  tickClock();
+
+  setInterval(()=>{ recomputeAll(); refreshActiveTab(); }, 30000);
+
+  function scheduleNextEvent(){
+    const delay = rand(4000, 9000);
+    setTimeout(()=>{ generateFloorEvent(); scheduleNextEvent(); }, delay);
+  }
+
+  /* =========================================================
+     INIT
+  ========================================================= */
+  recomputeAll();
+  initResourceOrder();
+  seedInitialBlocks(4);
+  recomputeAll();
+  showTab("triage");
+  scheduleNextEvent();
+})();
+</script>
+</body>
+</html>
